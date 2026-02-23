@@ -20,6 +20,7 @@ import {
 import { useI18n } from "@/lib/i18n/context"
 import type { FinishMode } from "@/lib/game-types"
 import { Undo2, MoreVertical, RotateCcw, Home, HelpCircle } from "lucide-react"
+import { APP_VERSION } from "@/lib/version"
 
 interface GameControlsProps {
   onUndo: () => void
@@ -111,6 +112,9 @@ export function GameControls({ onUndo, onNewGame, onResetGame, canUndo, finishMo
                 {checkoutDesc}
               </p>
             </div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-border/50 text-center text-xs text-muted-foreground">
+            <span>Version {APP_VERSION}</span>
           </div>
         </DialogContent>
       </Dialog>

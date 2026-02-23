@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { Target, Plus, Trash2, Users, Play, GripVertical, CircleDot, Circle, HelpCircle } from "lucide-react"
 import { PlayerNameInput } from "@/components/player-name-input"
+import { APP_VERSION } from "@/lib/version"
 
 const MAX_NAME_LENGTH = 10
 
@@ -147,6 +148,9 @@ export function GameSetup({ onStartGame }: GameSetupProps) {
                   <h4 className="font-semibold text-foreground mb-1">{t.helpStatsTitle}</h4>
                   <p className="text-muted-foreground leading-relaxed">{t.helpStatsDesc}</p>
                 </section>
+              </div>
+              <div className="mt-4 pt-4 border-t border-border/50 text-center text-xs text-muted-foreground">
+                <span>Version {APP_VERSION}</span>
               </div>
             </DialogContent>
           </Dialog>

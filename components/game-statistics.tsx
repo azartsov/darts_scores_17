@@ -46,6 +46,8 @@ export function GameStatistics({ players, gameType, finishMode, winner, totalLeg
     setCanShareFiles(hasFileShare)
   }, [])
 
+  const isMultiLeg = totalLegs > 1
+
   // Calculate statistics
   const calculateStats = (): PlayerStats[] => {
     const stats = players.map((player) => {
@@ -80,8 +82,22 @@ export function GameStatistics({ players, gameType, finishMode, winner, totalLeg
     })
 
     stats.sort((a, b) => {
-      if (b.player.legsWon !== a.player.legsWon) return b.player.legsWon - a.player.legsWon
-      if (a.player.currentScore !== b.player.currentScore) return a.player.currentScore - b.player.currentScore
+      // For multi-leg: sort by win percentage (legs won / total legs), then by avg/3
+      if (isMultiLeg) {
+        const winPercentA = a.player.legsWon / totalLegs
+        const winPercentB = b.player.legsWon / totalLegs
+        
+        if (Math.abs(winPercentA - winPercentB) > 0.0001) {
+          return winPercentB - winPercentA // Higher win percentage first
+        }
+        // If win percentages are equal, sort by avg/3
+        return b.avgPer3Darts - a.avgPer3Darts
+      }
+      
+      // For single leg: sort by remaining score (ascending), then by avg/3 (descending)
+      if (a.player.currentScore !== b.player.currentScore) {
+        return a.player.currentScore - b.player.currentScore
+      }
       return b.avgPer3Darts - a.avgPer3Darts
     })
 
@@ -90,7 +106,6 @@ export function GameStatistics({ players, gameType, finishMode, winner, totalLeg
   }
 
   const stats = calculateStats()
-  const isMultiLeg = totalLegs > 1
 
   // Generate statistics image using canvas
   const generateStatsImage = useCallback(async (): Promise<Blob> => {
