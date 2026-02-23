@@ -110,6 +110,9 @@ export interface Translations {
   copyImage: string
   imageCopied: string
   generatingImage: string
+  ratingRulesTitle: string
+  ratingRulesText: string
+  eloColumn: string
 
   // Dart Input Mode
   inputModeButtons: string
@@ -166,6 +169,7 @@ export interface Translations {
   statsLoadError: string
   statsRanking: string
   statsByMonth: string
+  statsElo: string
   statsGames: string
   statsWins: string
   gameSaved: string
@@ -366,6 +370,7 @@ export const translations: Record<Language, Translations> = {
     statsLoadError: "Failed to load stats",
     statsRanking: "Ranking",
     statsByMonth: "By Month",
+    statsElo: "ELO",
     statsGames: "Games",
     statsWins: "Wins",
     gameSaved: "Game saved!",
@@ -383,6 +388,9 @@ export const translations: Record<Language, Translations> = {
     shareRating: "Share Rating",
     copyRating: "Copy Rating",
     ratingCopied: "Rating copied!",
+    ratingRulesTitle: "Rating rules",
+    ratingRulesText: "Win% = legs won / total legs × 100. When Win% is equal, tie-breaker is Avg/3 (Avg/3 = (Total points ÷ Total darts) × 3). Additionally, an ELO rating is calculated per player: players start at 1500 and after each game the winner's rating is updated against each opponent using standard Elo with K=32. Use the ELO tab to sort by Elo. Remaining ties preserve current order.",
+    eloColumn: "ELO",
     noData: "No data",
     actions: "Actions",
 
@@ -564,6 +572,7 @@ export const translations: Record<Language, Translations> = {
     statsLoadError: "Не удалось загрузить статистику",
     statsRanking: "Рейтинг",
     statsByMonth: "По месяцам",
+    statsElo: "ELO",
     statsGames: "Игры",
     statsWins: "Победы",
     gameSaved: "Игра сохранена!",
@@ -581,6 +590,9 @@ export const translations: Record<Language, Translations> = {
     shareRating: "Поделиться рейтингом",
     copyRating: "Копировать рейтинг",
     ratingCopied: "Рейтинг скопирован!",
+    ratingRulesTitle: "Правила расчёта рейтинга",
+    ratingRulesText: "Win% = выигранные леги / общее число легов × 100. При равных Win% применяется Ср/3 (Ср/3 = (Всего очков ÷ Всего бросков) × 3). Также рассчитывается ELO-рейтинг: начальное значение 1500, после каждой игры рейтинг победителя и проигравших обновляется парными сравнениями по стандартному алгоритму ELO с K=32. Во вкладке ELO сортировка по ELO. Если ничья сохраняется — порядок не меняется.",
+    eloColumn: "ELO",
     noData: "Нет данных",
     actions: "Действия",
 

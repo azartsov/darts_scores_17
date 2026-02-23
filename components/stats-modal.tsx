@@ -19,7 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
-import { BarChart3, X, Loader2, Trophy, Calendar, ChevronDown, ChevronRight, Download, Upload, Share2, AlertTriangle, MoreVertical, Clipboard } from "lucide-react"
+import { BarChart3, X, Loader2, Trophy, Calendar, ChevronDown, ChevronRight, Download, Upload, Share2, AlertTriangle, MoreVertical, Clipboard, Info } from "lucide-react"
 
 interface StatsModalProps {
   userId: string
@@ -46,11 +46,12 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
   const [games, setGames] = useState<SavedGame[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<"ranking" | "history">("ranking")
+  const [tab, setTab] = useState<"ranking" | "history" | "elo">("ranking")
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set())
   const [backingUp, setBackingUp] = useState(false)
   const [restoring, setRestoring] = useState(false)
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
+  const [showRules, setShowRules] = useState(false)
   const [pendingRestoreXml, setPendingRestoreXml] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: "ok" | "err" } | null>(null)
   const [sharing, setSharing] = useState(false)
@@ -149,6 +150,81 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
         || (b.checkoutPct ?? -1) - (a.checkoutPct ?? -1)
         || a.name.localeCompare(b.name)
       )
+  }, [games])
+
+  // ELO rankings: compute ELO per player from game history
+  const eloRankings = useMemo(() => {
+    const initialRating = 1500
+    const K = 32
+    type S = {
+      rating: number
+      games: number
+      wins: number
+      totalPoints: number
+      totalDarts: number
+      checkoutSuccesses: number
+      checkoutAttempts: number
+    }
+
+    const map = new Map<string, S>()
+
+    // Sort games chronologically (oldest first) to apply Elo in order
+    const sorted = [...games].slice().sort((a, b) => {
+      const ta = a.timestamp?.seconds ?? 0
+      const tb = b.timestamp?.seconds ?? 0
+      return ta - tb
+    })
+
+    // Ensure all players initialized
+    for (const g of sorted) {
+      for (const p of g.players) {
+        if (!map.has(p.name)) {
+          map.set(p.name, { rating: initialRating, games: 0, wins: 0, totalPoints: 0, totalDarts: 0, checkoutSuccesses: 0, checkoutAttempts: 0 })
+        }
+      }
+      // For each game, apply outcomes
+      const winner = g.winner
+      for (const p of g.players) {
+        const entry = map.get(p.name)!
+        // accumulate raw stats
+        entry.games++
+        if (p.name === winner) entry.wins++
+        entry.totalPoints += (p.average * p.totalDarts) / 3
+        entry.totalDarts += p.totalDarts
+        if (p.checkoutPct !== null && p.checkoutPct !== undefined) {
+          entry.checkoutSuccesses += p.checkoutPct
+          entry.checkoutAttempts++
+        }
+      }
+
+      // Elo update: winner vs each opponent
+      if (winner) {
+        const winnerEntry = map.get(winner)!
+        for (const p of g.players) {
+          if (p.name === winner) continue
+          const oppEntry = map.get(p.name)!
+          const expectedWin = 1 / (1 + Math.pow(10, (oppEntry.rating - winnerEntry.rating) / 400))
+          // Update ratings (float)
+          winnerEntry.rating += K * (1 - expectedWin)
+          oppEntry.rating += K * (0 - (1 - expectedWin))
+        }
+      }
+    }
+
+    // Map to output array
+    const out = Array.from(map.entries()).map(([name, s]) => ({
+      name,
+      gamesPlayed: s.games,
+      wins: s.wins,
+      elo: Math.round(s.rating),
+      winPct: s.games > 0 ? Math.round((s.wins / s.games) * 1000) / 10 : 0,
+      avgPer3: s.totalDarts > 0 ? Math.round((s.totalPoints / s.totalDarts) * 3 * 10) / 10 : 0,
+      checkoutPct: s.checkoutAttempts > 0 ? Math.round((s.checkoutSuccesses / s.checkoutAttempts) * 10) / 10 : null,
+    }))
+
+    // Sort primarily by Elo desc, then winPct desc, then avg desc, then name
+    out.sort((a, b) => (b.elo - a.elo) || (b.winPct - a.winPct) || (b.avgPer3 - a.avgPer3) || a.name.localeCompare(b.name))
+    return out
   }, [games])
 
   // Tab 2: Group games by month
@@ -332,6 +408,13 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
                         }
                         <span>{isMobileOrTablet ? t.shareRating : t.copyRating}</span>
                       </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setShowRules(true)}
+                        className="gap-2"
+                      >
+                        <Info className="w-4 h-4" />
+                        <span>{t.ratingRulesTitle}</span>
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                     </>
                   )}
@@ -401,6 +484,17 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
             >
               {t.statsByMonth}
             </button>
+            <button
+              type="button"
+              onClick={() => setTab("elo")}
+              className={`flex-1 py-2 text-xs font-medium transition-colors ${
+                tab === "elo"
+                  ? "text-primary border-b-2 border-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t.statsElo}
+            </button>
           </div>
         )}
 
@@ -445,6 +539,40 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
                       <td className="py-2 font-medium truncate max-w-[100px]">{r.name}</td>
                       <td className="py-2 text-center">{r.gamesPlayed}</td>
                       <td className="py-2 text-center">{r.wins}</td>
+                      <td className="py-2 text-center font-medium">{r.winPct.toFixed(1)}</td>
+                      <td className="py-2 text-right font-medium">{r.avgPer3.toFixed(1)}</td>
+                      <td className="py-2 text-right text-muted-foreground">{r.checkoutPct !== null ? r.checkoutPct.toFixed(1) : "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Tab 1.5: ELO Ranking */}
+          {!loading && !error && games.length > 0 && tab === "elo" && (
+            <div className="overflow-x-auto -mx-4 px-4">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="text-muted-foreground border-b border-border/50">
+                    <th className="text-left py-2 font-medium">#</th>
+                    <th className="text-left py-2 font-medium">{t.playerName}</th>
+                    <th className="text-center py-2 font-medium">{t.statsGames}</th>
+                    <th className="text-center py-2 font-medium">{t.statsWins}</th>
+                    <th className="text-center py-2 font-medium">{t.eloColumn || 'ELO'}</th>
+                    <th className="text-center py-2 font-medium">%</th>
+                    <th className="text-right py-2 font-medium">{t.avgPer3Darts}</th>
+                    <th className="text-right py-2 font-medium">CO%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {eloRankings.map((r, i) => (
+                    <tr key={r.name} className={`border-b border-border/20 ${i === 0 ? "text-primary" : "text-foreground"}`}>
+                      <td className="py-2 text-muted-foreground">{i + 1}</td>
+                      <td className="py-2 font-medium truncate max-w-[100px]">{r.name}</td>
+                      <td className="py-2 text-center">{r.gamesPlayed}</td>
+                      <td className="py-2 text-center">{r.wins}</td>
+                      <td className="py-2 text-center font-medium">{r.elo}</td>
                       <td className="py-2 text-center font-medium">{r.winPct.toFixed(1)}</td>
                       <td className="py-2 text-right font-medium">{r.avgPer3.toFixed(1)}</td>
                       <td className="py-2 text-right text-muted-foreground">{r.checkoutPct !== null ? r.checkoutPct.toFixed(1) : "-"}</td>
@@ -513,6 +641,28 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
             toast.type === "ok" ? "bg-primary/90 text-primary-foreground" : "bg-destructive/90 text-destructive-foreground"
           }`}>
             {toast.msg}
+          </div>
+        )}
+
+        {/* Rules Modal */}
+        {showRules && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg">
+            <div className="bg-card border border-border rounded-lg p-5 mx-4 max-w-md space-y-4">
+              <div className="flex items-center gap-2">
+                <Info className="w-5 h-5 text-primary shrink-0" />
+                <h3 className="text-sm font-semibold text-foreground">{t.ratingRulesTitle}</h3>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">{t.ratingRulesText}</p>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowRules(false)}
+                  className="flex-1 h-9 text-sm bg-secondary text-secondary-foreground"
+                >
+                  {t.close}
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 
