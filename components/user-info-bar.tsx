@@ -45,7 +45,7 @@ export function UserInfoBar() {
               className="text-muted-foreground hover:text-foreground h-7 gap-1 px-2 bg-transparent"
             >
               <BarChart3 className="w-3.5 h-3.5" />
-              <span className="text-[11px]">{t.rating}</span>
+              <span className="text-[11px]">{t.statistics}</span>
             </Button>
           )}
           {/* Logout */}

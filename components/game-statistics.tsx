@@ -30,6 +30,7 @@ interface PlayerStats {
   totalRounds: number
   bustRounds: number
   position: number
+  eloDelta: number
 }
 
 export function GameStatistics({ players, gameType, finishMode, winner, totalLegs, currentLeg }: GameStatisticsProps) {
@@ -47,6 +48,41 @@ export function GameStatistics({ players, gameType, finishMode, winner, totalLeg
   }, [])
 
   const isMultiLeg = totalLegs > 1
+
+  // Calculate ELO deltas
+  const calculateEloDeltas = (): Record<string, number> => {
+    const K = 32
+    const initialElo = 1500
+    const deltas: Record<string, number> = {}
+    
+    if (players.length === 0) return deltas
+    
+    // Winner vs each opponent (pairwise updates)
+    const opponents = players.filter(p => p.id !== winner.id)
+    
+    for (const opponent of opponents) {
+      const winnerElo = initialElo
+      const opponentElo = initialElo
+      
+      // Expected score for winner
+      const expectedWinner = 1 / (1 + Math.pow(10, (opponentElo - winnerElo) / 400))
+      
+      // Winner gets +K * (1 - expectedWinner)
+      deltas[winner.id] = (deltas[winner.id] || 0) + K * (1 - expectedWinner)
+      
+      // Opponent gets -K * expectedWinner
+      deltas[opponent.id] = (deltas[opponent.id] || 0) - K * expectedWinner
+    }
+    
+    // Round to nearest integer
+    Object.keys(deltas).forEach(id => {
+      deltas[id] = Math.round(deltas[id])
+    })
+    
+    return deltas
+  }
+
+  const eloDeltas = calculateEloDeltas()
 
   // Calculate statistics
   const calculateStats = (): PlayerStats[] => {
@@ -78,6 +114,7 @@ export function GameStatistics({ players, gameType, finishMode, winner, totalLeg
         totalRounds,
         bustRounds,
         position: 0,
+        eloDelta: eloDeltas[player.id] || 0,
       }
     })
 
@@ -158,10 +195,11 @@ export function GameStatistics({ players, gameType, finishMode, winner, totalLeg
     const colX = {
       pos: pad,
       name: pad + 28 * dpr,
-      extra: W - pad - 210 * dpr,
-      avg: W - pad - 140 * dpr,
-      darts: W - pad - 70 * dpr,
-      busts: W - pad,
+      extra: W - pad - 260 * dpr,
+      avg: W - pad - 180 * dpr,
+      darts: W - pad - 110 * dpr,
+      busts: W - pad - 50 * dpr,
+      elo: W - pad,
     }
 
     // Table header
@@ -179,6 +217,7 @@ export function GameStatistics({ players, gameType, finishMode, winner, totalLeg
     ctx.fillText(language === "ru" ? "Ср/3" : "Avg/3", colX.avg, tableY + 20 * dpr)
     ctx.fillText(language === "ru" ? "Броски" : "Darts", colX.darts, tableY + 20 * dpr)
     ctx.fillText(language === "ru" ? "Перебр." : "Busts", colX.busts, tableY + 20 * dpr)
+    ctx.fillText("ELO Δ", colX.elo, tableY + 20 * dpr)
 
     // Table rows
     stats.forEach((stat, i) => {
@@ -217,6 +256,18 @@ export function GameStatistics({ players, gameType, finishMode, winner, totalLeg
 
       ctx.fillStyle = stat.bustRounds > 0 ? "#f87171" : "#475569"
       ctx.fillText(`${stat.bustRounds}`, colX.busts, textY)
+      
+      // ELO Delta with color coding
+      const eloDelta = stat.eloDelta
+      if (eloDelta > 0) {
+        ctx.fillStyle = "#4ade80" // Green for positive
+      } else if (eloDelta < 0) {
+        ctx.fillStyle = "#f87171" // Red for negative
+      } else {
+        ctx.fillStyle = "#94a3b8" // Gray for zero
+      }
+      ctx.font = `bold ${11 * dpr}px sans-serif`
+      ctx.fillText(`${eloDelta > 0 ? "+" : ""}${eloDelta}`, colX.elo, textY)
     })
 
     // Footer
@@ -307,23 +358,29 @@ export function GameStatistics({ players, gameType, finishMode, winner, totalLeg
                 <th className="text-right py-1.5 px-1 text-muted-foreground font-medium">{t.avgPer3Darts}</th>
                 <th className="text-right py-1.5 px-1 text-muted-foreground font-medium">{t.dartsThrown}</th>
                 <th className="text-right py-1.5 px-1 text-muted-foreground font-medium">{t.busts}</th>
+                <th className="text-right py-1.5 px-1 text-muted-foreground font-medium">{t.eloDelta || "ELO Δ"}</th>
               </tr>
             </thead>
             <tbody>
-              {stats.map((stat) => (
-                <tr key={stat.player.id} className={`border-b border-border/50 ${stat.position === 1 ? "bg-primary/10" : ""}`}>
-                  <td className="py-1.5 px-1 text-foreground font-medium">{stat.position}</td>
-                  <td className="py-1.5 px-1 text-foreground truncate max-w-[80px]">
-                    {stat.player.name}
-                    {stat.position === 1 && <span className="ml-0.5 text-primary">*</span>}
-                  </td>
-                  {isMultiLeg && <td className="py-1.5 px-1 text-right text-foreground font-medium">{stat.player.legsWon}/{totalLegs}</td>}
-                  <td className="py-1.5 px-1 text-right text-foreground">{stat.player.currentScore}</td>
-                  <td className="py-1.5 px-1 text-right text-foreground font-medium">{stat.avgPer3Darts.toFixed(1)}</td>
-                  <td className="py-1.5 px-1 text-right text-foreground">{stat.totalDarts}</td>
-                  <td className="py-1.5 px-1 text-right text-muted-foreground">{stat.bustRounds}</td>
-                </tr>
-              ))}
+              {stats.map((stat) => {
+                const eloDelta = stat.eloDelta
+                const eloColor = eloDelta > 0 ? "text-green-500" : eloDelta < 0 ? "text-red-500" : "text-muted-foreground"
+                return (
+                  <tr key={stat.player.id} className={`border-b border-border/50 ${stat.position === 1 ? "bg-primary/10" : ""}`}>
+                    <td className="py-1.5 px-1 text-foreground font-medium">{stat.position}</td>
+                    <td className="py-1.5 px-1 text-foreground truncate max-w-[80px]">
+                      {stat.player.name}
+                      {stat.position === 1 && <span className="ml-0.5 text-primary">*</span>}
+                    </td>
+                    {isMultiLeg && <td className="py-1.5 px-1 text-right text-foreground font-medium">{stat.player.legsWon}/{totalLegs}</td>}
+                    <td className="py-1.5 px-1 text-right text-foreground">{stat.player.currentScore}</td>
+                    <td className="py-1.5 px-1 text-right text-foreground font-medium">{stat.avgPer3Darts.toFixed(1)}</td>
+                    <td className="py-1.5 px-1 text-right text-foreground">{stat.totalDarts}</td>
+                    <td className="py-1.5 px-1 text-right text-muted-foreground">{stat.bustRounds}</td>
+                    <td className={`py-1.5 px-1 text-right font-medium ${eloColor}`}>{eloDelta > 0 ? "+" : ""}{eloDelta}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

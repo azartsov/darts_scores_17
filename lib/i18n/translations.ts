@@ -113,6 +113,7 @@ export interface Translations {
   ratingRulesTitle: string
   ratingRulesText: string
   eloColumn: string
+  eloDelta: string
 
   // Dart Input Mode
   inputModeButtons: string
@@ -369,8 +370,8 @@ export const translations: Record<Language, Translations> = {
     noGamesYet: "No games saved yet. Play a game and it will appear here!",
     statsLoadError: "Failed to load stats",
     statsRanking: "Ranking",
-    statsByMonth: "By Month",
-    statsElo: "ELO",
+    statsByMonth: "Matches",
+    statsElo: "ELO Rating",
     statsGames: "Games",
     statsWins: "Wins",
     gameSaved: "Game saved!",
@@ -389,8 +390,9 @@ export const translations: Record<Language, Translations> = {
     copyRating: "Copy Rating",
     ratingCopied: "Rating copied!",
     ratingRulesTitle: "Rating rules",
-    ratingRulesText: "Win% = legs won / total legs × 100. When Win% is equal, tie-breaker is Avg/3 (Avg/3 = (Total points ÷ Total darts) × 3). Additionally, an ELO rating is calculated per player: players start at 1500 and after each game the winner's rating is updated against each opponent using standard Elo with K=32. Use the ELO tab to sort by Elo. Remaining ties preserve current order.",
+    ratingRulesText: "ELO rating: each player starts at 1500. After every game, update the winner's rating and each opponent's rating using the standard Elo formula (expected score = 1 / (1 + 10^{(opponentRating - playerRating)/400})). Use K=32 for rating updates. For multi-player games, apply the winner vs each opponent as separate pairwise updates.",
     eloColumn: "ELO",
+    eloDelta: "ELO Δ",
     noData: "No data",
     actions: "Actions",
 
@@ -571,8 +573,8 @@ export const translations: Record<Language, Translations> = {
     noGamesYet: "Игр пока нет. Сыграйте партию, и она появится здесь!",
     statsLoadError: "Не удалось загрузить статистику",
     statsRanking: "Рейтинг",
-    statsByMonth: "По месяцам",
-    statsElo: "ELO",
+    statsByMonth: "Матчи",
+    statsElo: "Рейтинг ELO",
     statsGames: "Игры",
     statsWins: "Победы",
     gameSaved: "Игра сохранена!",
@@ -591,8 +593,9 @@ export const translations: Record<Language, Translations> = {
     copyRating: "Копировать рейтинг",
     ratingCopied: "Рейтинг скопирован!",
     ratingRulesTitle: "Правила расчёта рейтинга",
-    ratingRulesText: "Win% = выигранные леги / общее число легов × 100. При равных Win% применяется Ср/3 (Ср/3 = (Всего очков ÷ Всего бросков) × 3). Также рассчитывается ELO-рейтинг: начальное значение 1500, после каждой игры рейтинг победителя и проигравших обновляется парными сравнениями по стандартному алгоритму ELO с K=32. Во вкладке ELO сортировка по ELO. Если ничья сохраняется — порядок не меняется.",
+    ratingRulesText: "ELO-рейтинг: каждому игроку присваивается 1500. После каждой игры рейтинг победителя и каждого соперника обновляется по стандартной формуле ELO (ожидаемый счёт = 1 / (1 + 10^{(рейтинг_оппонента - рейтинг_игрока)/400})). Для обновления используем K=32. В многопользовательских партиях применяйте обновление победителя против каждого оппонента как серию попарных обновлений.",
     eloColumn: "ELO",
+    eloDelta: "ELO Δ",
     noData: "Нет данных",
     actions: "Действия",
 

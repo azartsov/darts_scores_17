@@ -2,8 +2,10 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context"
 import { fetchPlayerNames } from "@/lib/game-firestore"
+import { ChevronDown } from "lucide-react"
 
 const MAX_NAME_LENGTH = 10
 
@@ -12,9 +14,10 @@ interface PlayerNameInputProps {
   onChange: (name: string) => void
   placeholder: string
   maxLength?: number
+  onEnter?: () => void
 }
 
-export function PlayerNameInput({ value, onChange, placeholder, maxLength = MAX_NAME_LENGTH }: PlayerNameInputProps) {
+export function PlayerNameInput({ value, onChange, placeholder, maxLength = MAX_NAME_LENGTH, onEnter }: PlayerNameInputProps) {
   const { user } = useAuth()
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [allNames, setAllNames] = useState<string[]>([])
@@ -69,6 +72,15 @@ export function PlayerNameInput({ value, onChange, placeholder, maxLength = MAX_
     }
   }
 
+  const handleDropdownClick = () => {
+    // Show all available names when clicking dropdown button
+    if (allNames.length > 0) {
+      setSuggestions(allNames)
+      setShowDropdown(true)
+      inputRef.current?.focus()
+    }
+  }
+
   const selectName = (name: string) => {
     onChange(name)
     setShowDropdown(false)
@@ -108,17 +120,32 @@ export function PlayerNameInput({ value, onChange, placeholder, maxLength = MAX_
 
   return (
     <div ref={wrapperRef} className="flex-1 relative">
-      <Input
-        ref={inputRef}
-        value={value}
-        onChange={handleChange}
-        onFocus={handleFocus}
-        maxLength={maxLength}
-        className="bg-input border-border text-foreground pr-9"
-        placeholder={placeholder}
-        autoComplete="off"
-      />
-      <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-[10px] tabular-nums pointer-events-none ${
+      <div className="flex items-center">
+        <Input
+          ref={inputRef}
+          value={value}
+          onChange={handleChange}
+          onFocus={handleFocus}
+          onKeyDown={(e) => e.key === "Enter" && onEnter?.()}
+          maxLength={maxLength}
+          className="bg-input border-border text-foreground pr-9"
+          placeholder={placeholder}
+          autoComplete="off"
+        />
+        {allNames.length > 0 && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={handleDropdownClick}
+            className="absolute right-0 h-full w-9 text-muted-foreground hover:text-foreground shrink-0"
+            title="Show all players"
+          >
+            <ChevronDown className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
+      <span className={`absolute right-8 top-1/2 -translate-y-1/2 text-[10px] tabular-nums pointer-events-none ${
         value.length >= maxLength ? "text-destructive" : "text-muted-foreground/50"
       }`}>
         {value.length}/{maxLength}
@@ -126,14 +153,14 @@ export function PlayerNameInput({ value, onChange, placeholder, maxLength = MAX_
 
       {/* Dropdown */}
       {showDropdown && suggestions.length > 0 && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-popover border border-border rounded-md shadow-lg overflow-hidden">
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-popover border border-border rounded-md shadow-lg overflow-hidden max-h-48 overflow-y-auto">
           {suggestions.map((name) => (
             <button
               key={name}
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => selectName(name)}
-              className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-accent/50 transition-colors"
+              className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-accent/50 transition-colors border-b border-border/30 last:border-b-0"
             >
               {name}
             </button>

@@ -46,7 +46,7 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
   const [games, setGames] = useState<SavedGame[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<"ranking" | "history" | "elo">("ranking")
+  const [tab, setTab] = useState<"ranking" | "history" | "elo">("elo")
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set())
   const [backingUp, setBackingUp] = useState(false)
   const [restoring, setRestoring] = useState(false)
@@ -377,7 +377,7 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-primary" />
-            <h2 className="text-base font-semibold text-foreground">{t.rating}</h2>
+            <h2 className="text-base font-semibold text-foreground">{t.statistics}</h2>
           </div>
           <div className="flex items-center gap-1">
             {/* Actions dropdown */}
@@ -464,14 +464,14 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
           <div className="flex border-b border-border shrink-0">
             <button
               type="button"
-              onClick={() => setTab("ranking")}
+              onClick={() => setTab("elo")}
               className={`flex-1 py-2 text-xs font-medium transition-colors ${
-                tab === "ranking"
+                tab === "elo"
                   ? "text-primary border-b-2 border-primary"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {t.statsRanking}
+              {t.statsElo}
             </button>
             <button
               type="button"
@@ -483,17 +483,6 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
               }`}
             >
               {t.statsByMonth}
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("elo")}
-              className={`flex-1 py-2 text-xs font-medium transition-colors ${
-                tab === "elo"
-                  ? "text-primary border-b-2 border-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t.statsElo}
             </button>
           </div>
         )}
@@ -517,37 +506,7 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
             </div>
           )}
 
-          {/* Tab 1: Ranking */}
-          {!loading && !error && games.length > 0 && tab === "ranking" && (
-            <div className="overflow-x-auto -mx-4 px-4">
-              <table className="w-full text-[11px]">
-                <thead>
-                  <tr className="text-muted-foreground border-b border-border/50">
-                    <th className="text-left py-2 font-medium">#</th>
-                    <th className="text-left py-2 font-medium">{t.playerName}</th>
-                    <th className="text-center py-2 font-medium">{t.statsGames}</th>
-                    <th className="text-center py-2 font-medium">{t.statsWins}</th>
-                    <th className="text-center py-2 font-medium">%</th>
-                    <th className="text-right py-2 font-medium">{t.avgPer3Darts}</th>
-                    <th className="text-right py-2 font-medium">CO%</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rankings.map((r, i) => (
-                    <tr key={r.name} className={`border-b border-border/20 ${i === 0 ? "text-primary" : "text-foreground"}`}>
-                      <td className="py-2 text-muted-foreground">{i + 1}</td>
-                      <td className="py-2 font-medium truncate max-w-[100px]">{r.name}</td>
-                      <td className="py-2 text-center">{r.gamesPlayed}</td>
-                      <td className="py-2 text-center">{r.wins}</td>
-                      <td className="py-2 text-center font-medium">{r.winPct.toFixed(1)}</td>
-                      <td className="py-2 text-right font-medium">{r.avgPer3.toFixed(1)}</td>
-                      <td className="py-2 text-right text-muted-foreground">{r.checkoutPct !== null ? r.checkoutPct.toFixed(1) : "-"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {/* Ranking tab removed — ELO tab is primary now */}
 
           {/* Tab 1.5: ELO Ranking */}
           {!loading && !error && games.length > 0 && tab === "elo" && (
@@ -557,9 +516,9 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
                   <tr className="text-muted-foreground border-b border-border/50">
                     <th className="text-left py-2 font-medium">#</th>
                     <th className="text-left py-2 font-medium">{t.playerName}</th>
+                    <th className="text-center py-2 font-medium">{t.eloColumn || 'ELO'}</th>
                     <th className="text-center py-2 font-medium">{t.statsGames}</th>
                     <th className="text-center py-2 font-medium">{t.statsWins}</th>
-                    <th className="text-center py-2 font-medium">{t.eloColumn || 'ELO'}</th>
                     <th className="text-center py-2 font-medium">%</th>
                     <th className="text-right py-2 font-medium">{t.avgPer3Darts}</th>
                     <th className="text-right py-2 font-medium">CO%</th>
@@ -570,9 +529,9 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
                     <tr key={r.name} className={`border-b border-border/20 ${i === 0 ? "text-primary" : "text-foreground"}`}>
                       <td className="py-2 text-muted-foreground">{i + 1}</td>
                       <td className="py-2 font-medium truncate max-w-[100px]">{r.name}</td>
+                      <td className="py-2 text-center font-medium">{r.elo}</td>
                       <td className="py-2 text-center">{r.gamesPlayed}</td>
                       <td className="py-2 text-center">{r.wins}</td>
-                      <td className="py-2 text-center font-medium">{r.elo}</td>
                       <td className="py-2 text-center font-medium">{r.winPct.toFixed(1)}</td>
                       <td className="py-2 text-right font-medium">{r.avgPer3.toFixed(1)}</td>
                       <td className="py-2 text-right text-muted-foreground">{r.checkoutPct !== null ? r.checkoutPct.toFixed(1) : "-"}</td>
@@ -856,6 +815,45 @@ function GameCard({ game, t, language, formatDate }: {
 }) {
   const [expanded, setExpanded] = useState(false)
 
+  // Calculate ELO deltas for each player using standard Elo formula with K=32
+  const eloDeltas = useMemo(() => {
+    const K = 32
+    const initialElo = 1500
+    
+    const deltas: Record<string, number> = {}
+    
+    if (game.players.length === 0) return deltas
+    
+    // Get winner and opponents
+    const winner = game.players.find(p => p.name === game.winner)
+    if (!winner) return deltas
+    
+    // For each opponent, calculate pairwise ELO update
+    const opponents = game.players.filter(p => p.name !== game.winner)
+    
+    for (const opponent of opponents) {
+      // Assuming both start at 1500 if we don't have history
+      const winnerElo = initialElo
+      const opponentElo = initialElo
+      
+      // Expected score for winner
+      const expectedWinner = 1 / (1 + Math.pow(10, (opponentElo - winnerElo) / 400))
+      
+      // Winner gets +K * (1 - expectedWinner)
+      deltas[winner.name] = (deltas[winner.name] || 0) + K * (1 - expectedWinner)
+      
+      // Opponent gets -K * expectedWinner
+      deltas[opponent.name] = (deltas[opponent.name] || 0) - K * expectedWinner
+    }
+    
+    // Round to nearest integer
+    Object.keys(deltas).forEach(name => {
+      deltas[name] = Math.round(deltas[name])
+    })
+    
+    return deltas
+  }, [game])
+
   return (
     <div className="px-3 py-2.5 space-y-1.5">
       {/* Row: date + mode + winner */}
@@ -889,24 +887,32 @@ function GameCard({ game, t, language, formatDate }: {
                 <th className="text-right py-0.5 font-medium">{t.dartsThrown}</th>
                 <th className="text-right py-0.5 font-medium">{t.busts}</th>
                 <th className="text-right py-0.5 font-medium">CO%</th>
+                <th className="text-right py-0.5 font-medium">{t.eloDelta || "ELO Δ"}</th>
                 {game.legsPlayed > 1 && (
                   <th className="text-right py-0.5 font-medium">{t.legsHeader}</th>
                 )}
               </tr>
             </thead>
             <tbody>
-              {game.players.map((p, i) => (
-                <tr key={i} className={p.name === game.winner ? "text-primary" : "text-foreground"}>
-                  <td className="py-0.5 truncate max-w-[80px]">{p.name}</td>
-                  <td className="py-0.5 text-right font-medium">{p.average.toFixed(1)}</td>
-                  <td className="py-0.5 text-right">{p.totalDarts}</td>
-                  <td className="py-0.5 text-right text-muted-foreground">{p.busts}</td>
-                  <td className="py-0.5 text-right text-muted-foreground">{p.checkoutPct != null ? `${p.checkoutPct.toFixed(1)}` : "-"}</td>
-                  {game.legsPlayed > 1 && (
-                    <td className="py-0.5 text-right">{p.legsWon}</td>
-                  )}
-                </tr>
-              ))}
+              {game.players.map((p, i) => {
+                const eloDelta = eloDeltas[p.name] || 0
+                const isWinner = p.name === game.winner
+                return (
+                  <tr key={i} className={isWinner ? "text-primary" : "text-foreground"}>
+                    <td className="py-0.5 truncate max-w-[80px]">{p.name}</td>
+                    <td className="py-0.5 text-right font-medium">{p.average.toFixed(1)}</td>
+                    <td className="py-0.5 text-right">{p.totalDarts}</td>
+                    <td className="py-0.5 text-right text-muted-foreground">{p.busts}</td>
+                    <td className="py-0.5 text-right text-muted-foreground">{p.checkoutPct != null ? `${p.checkoutPct.toFixed(1)}` : "-"}</td>
+                    <td className={`py-0.5 text-right font-medium ${eloDelta > 0 ? "text-green-500" : eloDelta < 0 ? "text-red-500" : "text-muted-foreground"}`}>
+                      {eloDelta > 0 ? "+" : ""}{eloDelta}
+                    </td>
+                    {game.legsPlayed > 1 && (
+                      <td className="py-0.5 text-right">{p.legsWon}</td>
+                    )}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

@@ -328,13 +328,11 @@ export function GameSetup({ onStartGame }: GameSetupProps) {
             {/* Add Player */}
             {playerNames.length < 10 && (
               <div className="flex gap-2">
-                <Input
+                <PlayerNameInput
                   value={newPlayerName}
-                  onChange={(e) => { if (e.target.value.length <= MAX_NAME_LENGTH) setNewPlayerName(e.target.value) }}
-                  maxLength={MAX_NAME_LENGTH}
+                  onChange={(val) => { if (val.length <= MAX_NAME_LENGTH) setNewPlayerName(val) }}
+                  onEnter={addPlayer}
                   placeholder={formatString(t.playerPlaceholder, { num: playerNames.length + 1 })}
-                  className="flex-1 bg-input border-border text-foreground"
-                  onKeyDown={(e) => e.key === "Enter" && addPlayer()}
                 />
                 <Button
                   type="button"
