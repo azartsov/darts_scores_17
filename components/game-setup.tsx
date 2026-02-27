@@ -21,7 +21,14 @@ import { APP_VERSION } from "@/lib/version"
 const MAX_NAME_LENGTH = 10
 
 interface GameSetupProps {
-  onStartGame: (players: Player[], gameType: GameType, finishMode: FinishMode, totalLegs: TotalLegs) => void
+  // Returned value can be a promise since caller may need to fetch ratings before
+  // starting the game.
+  onStartGame: (
+    players: Player[],
+    gameType: GameType,
+    finishMode: FinishMode,
+    totalLegs: TotalLegs
+  ) => void | Promise<void>
 }
 
 export function GameSetup({ onStartGame }: GameSetupProps) {
@@ -65,6 +72,9 @@ export function GameSetup({ onStartGame }: GameSetupProps) {
       currentScore: gameType,
       history: [],
       legsWon: 0,
+      // rating will be filled by caller (page.tsx) but default to 1500 for
+      // completeness; setup itself doesn't know historical data.
+      rating: 1500,
     }))
     onStartGame(players, gameType, finishMode, totalLegs)
   }

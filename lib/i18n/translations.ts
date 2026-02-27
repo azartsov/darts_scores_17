@@ -97,6 +97,8 @@ export interface Translations {
   avgPer3Darts: string
   dartsThrown: string
   rounds: string
+  date: string
+  deltaSymbol: string
   busts: string
   legsHeader: string
   shareStats: string
@@ -112,6 +114,8 @@ export interface Translations {
   generatingImage: string
   ratingRulesTitle: string
   ratingRulesText: string
+  ratingHistoryTitle: string
+  vs: string
   eloColumn: string
   eloDelta: string
 
@@ -168,6 +172,7 @@ export interface Translations {
   rating: string
   noGamesYet: string
   statsLoadError: string
+  statsSignInRequired: string
   statsRanking: string
   statsByMonth: string
   statsElo: string
@@ -290,7 +295,7 @@ export const translations: Record<Language, Translations> = {
     finishedInTurnsDouble: "Double out in {turns} turns",
     finishedInTurnsSimple: "Finished in {turns} turns",
     rematch: "Rematch",
-    viewStats: "Stats",
+    viewStats: "Statistic",
     nextLeg: "Next Leg",
     wonLegMessage: "{player} wins Leg {leg}!",
 
@@ -369,11 +374,14 @@ export const translations: Record<Language, Translations> = {
     rating: "Rating",
     noGamesYet: "No games saved yet. Play a game and it will appear here!",
     statsLoadError: "Failed to load stats",
+    statsSignInRequired: "Sign in to view stats",
     statsRanking: "Ranking",
     statsByMonth: "Matches",
     statsElo: "ELO Rating",
     statsGames: "Games",
     statsWins: "Wins",
+    date: "Date",
+    deltaSymbol: "Δ",
     gameSaved: "Game saved!",
     gameSaveError: "Failed to save game",
     backupData: "Backup",
@@ -390,7 +398,9 @@ export const translations: Record<Language, Translations> = {
     copyRating: "Copy Rating",
     ratingCopied: "Rating copied!",
     ratingRulesTitle: "Rating rules",
-    ratingRulesText: "ELO rating: each player starts at 1500. After every game, update the winner's rating and each opponent's rating using the standard Elo formula (expected score = 1 / (1 + 10^{(opponentRating - playerRating)/400})). Use K=32 for rating updates. For multi-player games, apply the winner vs each opponent as separate pairwise updates.",
+    ratingRulesText: "ELO rating: players retain their current rating (1500 by default) based on past games. After every match, update the winner's rating and each opponent's rating using the standard Elo formula (expected score = 1 / (1 + 10^{(opponentRating - playerRating)/400})). Use K=32 for updates. For multi‑player games, apply the winner vs each opponent as separate pairwise updates.",
+    ratingHistoryTitle: "Rating history",
+    vs: "vs",
     eloColumn: "ELO",
     eloDelta: "ELO Δ",
     noData: "No data",
@@ -493,7 +503,7 @@ export const translations: Record<Language, Translations> = {
     finishedInTurnsDouble: "Дабл-аут за {turns} ходов",
     finishedInTurnsSimple: "Завершено за {turns} ходов",
     rematch: "Реванш",
-    viewStats: "Стат.",
+    viewStats: "Статистика",
     nextLeg: "След. лег",
     wonLegMessage: "{player} выиграл лег {leg}!",
 
@@ -572,10 +582,13 @@ export const translations: Record<Language, Translations> = {
     rating: "Рейтинг",
     noGamesYet: "Игр пока нет. Сыграйте партию, и она появится здесь!",
     statsLoadError: "Не удалось загрузить статистику",
+    statsSignInRequired: "Войдите, чтобы посмотреть статистику",
     statsRanking: "Рейтинг",
     statsByMonth: "Матчи",
     statsElo: "Рейтинг ELO",
     statsGames: "Игры",
+    date: "Дата",
+    deltaSymbol: "Δ",
     statsWins: "Победы",
     gameSaved: "Игра сохранена!",
     gameSaveError: "Не удалось сохранить игру",
@@ -593,7 +606,9 @@ export const translations: Record<Language, Translations> = {
     copyRating: "Копировать рейтинг",
     ratingCopied: "Рейтинг скопирован!",
     ratingRulesTitle: "Правила расчёта рейтинга",
-    ratingRulesText: "ELO-рейтинг: каждому игроку присваивается 1500. После каждой игры рейтинг победителя и каждого соперника обновляется по стандартной формуле ELO (ожидаемый счёт = 1 / (1 + 10^{(рейтинг_оппонента - рейтинг_игрока)/400})). Для обновления используем K=32. В многопользовательских партиях применяйте обновление победителя против каждого оппонента как серию попарных обновлений.",
+    ratingRulesText: "ELO‑рейтинг: игроки сохраняют свой текущий рейтинг (по умолчанию 1500) на основе предыдущих игр. После каждой партии рейтинг победителя и каждого соперника обновляется по стандартной формуле ELO (ожидаемый счёт = 1 / (1 + 10^{(рейтинг_оппонента - рейтинг_игрока)/400})). Для обновления используем K=32. В многопользовательских партиях применяйте обновление победителя против каждого соперника как серию попарных обновлений.",
+    ratingHistoryTitle: "История рейтинга",
+    vs: "против",
     eloColumn: "ELO",
     eloDelta: "ELO Δ",
     noData: "Нет данных",

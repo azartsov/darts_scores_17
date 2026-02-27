@@ -9,6 +9,12 @@ export interface Player {
   currentScore: number
   history: TurnHistory[]
   legsWon: number
+  /**
+   * Optional Elo rating carried over from previous games. Defaults to 1500 when
+   * not provided. This value is used by various statistics screens to calculate
+   * rating deltas correctly based on each player's current strength.
+   */
+  rating?: number
 }
 
 export interface TurnHistory {

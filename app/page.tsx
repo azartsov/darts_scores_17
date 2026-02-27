@@ -10,7 +10,7 @@ import { UserInfoBar } from "@/components/user-info-bar"
 import type { GameState, Player, GameType, TurnHistory, DartInput, FinishMode, TotalLegs } from "@/lib/game-types"
 import { saveGameState, loadGameState, clearGameState } from "@/lib/game-storage"
 import { useAuth } from "@/lib/auth-context"
-import { saveGameToFirestore } from "@/lib/game-firestore"
+import { saveGameToFirestore, fetchUserGames, computeEloRatings } from "@/lib/game-firestore"
 import { useI18n } from "@/lib/i18n/context"
 
 const initialGameState: GameState = {
@@ -53,10 +53,11 @@ export default function DartMasterPro() {
       if (!saved.startTime) {
         saved.startTime = Date.now()
       }
-      // Ensure players have legsWon
+      // Ensure players have legsWon and rating
       saved.players = saved.players.map(p => ({
         ...p,
         legsWon: p.legsWon ?? 0,
+        rating: p.rating ?? 1500,
       }))
       setGameState(saved)
     }
@@ -86,6 +87,7 @@ export default function DartMasterPro() {
     }
   }, [gameState.phase, gameState.players, gameState.gameType, gameState.finishMode, gameState.totalLegs, user])
 
+  // internal version that assumes players already have ratings assigned
   const handleStartGame = useCallback((players: Player[], gameType: GameType, finishMode: FinishMode, totalLegs: TotalLegs) => {
     savedGameRef.current = false
     setSaveStatus("idle")
@@ -104,6 +106,29 @@ export default function DartMasterPro() {
     setGameState(newState)
     setUndoStack([])
   }, [])
+
+  // wrapper used by <GameSetup> to enrich players with stored ratings
+  const handleStartGameWithRatings = useCallback(async (
+    players: Player[],
+    gameType: GameType,
+    finishMode: FinishMode,
+    totalLegs: TotalLegs
+  ) => {
+    let ratedPlayers = players.map((p) => ({ ...p, rating: 1500 }))
+    if (user && user.uid) {
+      try {
+        const history = await fetchUserGames(user.uid, 1000)
+        const ratingsMap = computeEloRatings(history)
+        ratedPlayers = ratedPlayers.map((p) => ({
+          ...p,
+          rating: ratingsMap[p.name] ?? 1500,
+        }))
+      } catch {
+        // network failure should not block game start; fall back to defaults
+      }
+    }
+    handleStartGame(ratedPlayers, gameType, finishMode, totalLegs)
+  }, [user, handleStartGame])
 
   const handleSubmitTurn = useCallback((darts: [number, number, number], dartDetails: [DartInput, DartInput, DartInput]) => {
     setGameState((prev) => {
@@ -297,7 +322,7 @@ export default function DartMasterPro() {
       <div className="flex flex-col min-h-screen">
         <UserInfoBar />
         <div className="flex-1">
-          <GameSetup onStartGame={handleStartGame} />
+          <GameSetup onStartGame={handleStartGameWithRatings} />
         </div>
       </div>
     )
@@ -340,11 +365,9 @@ export default function DartMasterPro() {
             saveStatus={saveStatus}
           />
         </div>
-        {/* Save toast */}
+        {/* Save toast: compact single-line text (no large button-like background) */}
         {saveToast && (
-          <div className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg text-sm font-medium shadow-lg transition-opacity ${
-            saveStatus === "saved" ? "bg-primary/90 text-primary-foreground" : "bg-destructive/90 text-destructive-foreground"
-          }`}>
+          <div className={`fixed bottom-2 left-1/2 -translate-x-1/2 z-50 text-xs ${saveStatus === "error" ? "text-destructive" : "text-muted-foreground"}`}>
             {saveToast}
           </div>
         )}

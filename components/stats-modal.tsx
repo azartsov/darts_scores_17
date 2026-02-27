@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react"
+import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useI18n } from "@/lib/i18n/context"
@@ -10,6 +11,7 @@ import {
   parseBackupXml,
   deleteAllUserGames,
   restoreGames,
+  computeEloRatings,
   type SavedGame,
 } from "@/lib/game-firestore"
 import {
@@ -48,6 +50,11 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<"ranking" | "history" | "elo">("elo")
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set())
+
+  // For ELO tab: which player (if any) is selected to view their history
+  const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null)
+  const [showPlayerHistory, setShowPlayerHistory] = useState(false)
+
   const [backingUp, setBackingUp] = useState(false)
   const [restoring, setRestoring] = useState(false)
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
@@ -71,10 +78,20 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
       .catch(() => setLoading(false))
   }, [userId])
 
+  const { user } = useAuth()
+
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(null)
+
+    // don't try fetching if there's no signed-in user
+    if (!user) {
+      setLoading(false)
+      setError(t.statsSignInRequired)
+      return () => { cancelled = true }
+    }
+
     fetchUserGames(userId, 200)
       .then((data) => {
         if (!cancelled) {
@@ -84,7 +101,7 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
             const first = data[0]
             if (first.timestamp) {
               const d = new Date(first.timestamp.seconds * 1000)
-              setExpandedMonths(new Set([`${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}`]))
+              setExpandedMonths(new Set([`${d.getFullYear()}-${String(d.getMonth()).padStart(2, "00")}`]))
             }
           }
         }
@@ -92,14 +109,17 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
       .catch((err) => {
         if (!cancelled) {
           const fe = err as { code?: string; message?: string }
-          setError(fe.code === "permission-denied"
-            ? (language === "ru" ? "Нет доступа. Проверьте правила Firestore." : "Permission denied. Check Firestore rules.")
-            : t.statsLoadError)
+          // show generic load error for permission problems (likely wrong user)
+          if (fe.code === "permission-denied") {
+            setError(t.statsLoadError)
+          } else {
+            setError(t.statsLoadError)
+          }
         }
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [userId, t.statsLoadError, language])
+  }, [userId, t, language, user])
 
   // Tab 1: Compute player rankings across all games
   const rankings = useMemo((): PlayerRanking[] => {
@@ -152,12 +172,14 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
       )
   }, [games])
 
-  // ELO rankings: compute ELO per player from game history
+  // ELO rankings: compute per-player rating using shared helper and also
+  // aggregate a few additional stats for display.
   const eloRankings = useMemo(() => {
-    const initialRating = 1500
-    const K = 32
-    type S = {
-      rating: number
+    // Acquire raw rating map from helper
+    const ratingsMap = computeEloRatings(games)
+
+    // We'll compute other statistics (games, wins, avg etc) similarly to before.
+    type Acc = {
       games: number
       wins: number
       totalPoints: number
@@ -165,28 +187,19 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
       checkoutSuccesses: number
       checkoutAttempts: number
     }
+    const map = new Map<string, Acc>()
 
-    const map = new Map<string, S>()
-
-    // Sort games chronologically (oldest first) to apply Elo in order
-    const sorted = [...games].slice().sort((a, b) => {
-      const ta = a.timestamp?.seconds ?? 0
-      const tb = b.timestamp?.seconds ?? 0
-      return ta - tb
-    })
-
-    // Ensure all players initialized
-    for (const g of sorted) {
-      for (const p of g.players) {
-        if (!map.has(p.name)) {
-          map.set(p.name, { rating: initialRating, games: 0, wins: 0, totalPoints: 0, totalDarts: 0, checkoutSuccesses: 0, checkoutAttempts: 0 })
-        }
-      }
-      // For each game, apply outcomes
+    for (const g of games) {
       const winner = g.winner
       for (const p of g.players) {
-        const entry = map.get(p.name)!
-        // accumulate raw stats
+        const entry = map.get(p.name) || {
+          games: 0,
+          wins: 0,
+          totalPoints: 0,
+          totalDarts: 0,
+          checkoutSuccesses: 0,
+          checkoutAttempts: 0,
+        }
         entry.games++
         if (p.name === winner) entry.wins++
         entry.totalPoints += (p.average * p.totalDarts) / 3
@@ -195,39 +208,128 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
           entry.checkoutSuccesses += p.checkoutPct
           entry.checkoutAttempts++
         }
-      }
-
-      // Elo update: winner vs each opponent
-      if (winner) {
-        const winnerEntry = map.get(winner)!
-        for (const p of g.players) {
-          if (p.name === winner) continue
-          const oppEntry = map.get(p.name)!
-          const expectedWin = 1 / (1 + Math.pow(10, (oppEntry.rating - winnerEntry.rating) / 400))
-          // Update ratings (float)
-          winnerEntry.rating += K * (1 - expectedWin)
-          oppEntry.rating += K * (0 - (1 - expectedWin))
-        }
+        map.set(p.name, entry)
       }
     }
 
-    // Map to output array
     const out = Array.from(map.entries()).map(([name, s]) => ({
       name,
       gamesPlayed: s.games,
       wins: s.wins,
-      elo: Math.round(s.rating),
+      elo: Math.round(ratingsMap[name] ?? 1500),
       winPct: s.games > 0 ? Math.round((s.wins / s.games) * 1000) / 10 : 0,
       avgPer3: s.totalDarts > 0 ? Math.round((s.totalPoints / s.totalDarts) * 3 * 10) / 10 : 0,
       checkoutPct: s.checkoutAttempts > 0 ? Math.round((s.checkoutSuccesses / s.checkoutAttempts) * 10) / 10 : null,
     }))
 
-    // Sort primarily by Elo desc, then winPct desc, then avg desc, then name
     out.sort((a, b) => (b.elo - a.elo) || (b.winPct - a.winPct) || (b.avgPer3 - a.avgPer3) || a.name.localeCompare(b.name))
     return out
   }, [games])
 
   // Tab 2: Group games by month
+  // map from game.id to per-player rating delta for that game; used
+  // to display accurate history in the UI. We replay the games in
+  // chronological order, maintaining a running rating table.
+  type PairwiseDelta = { player: string; delta: number; against: string }
+  const ratingHistory = useMemo((): Record<string, PairwiseDelta[]> => {
+    const sorted = [...games].slice().sort((a, b) => {
+      const ta = a.timestamp?.seconds ?? 0
+      const tb = b.timestamp?.seconds ?? 0
+      return ta - tb
+    })
+
+    const K = 32
+    const ratings: Record<string, number> = {}
+    const result: Record<string, PairwiseDelta[]> = {}
+
+    for (const g of sorted) {
+      const entries: PairwiseDelta[] = []
+      const winnerName = g.winner
+      if (winnerName) {
+        const opponents = g.players.filter(p => p.name !== winnerName)
+        for (const opp of opponents) {
+          const winnerElo = ratings[winnerName] ?? 1500
+          const oppElo = ratings[opp.name] ?? 1500
+          const expectedWinner = 1 / (1 + Math.pow(10, (oppElo - winnerElo) / 400))
+          const expectedOpp = 1 - expectedWinner
+          const winDelta = Math.round(K * (1 - expectedWinner))
+          const oppDelta = Math.round(-K * expectedOpp)
+          entries.push({ player: winnerName, delta: winDelta, against: opp.name })
+          entries.push({ player: opp.name, delta: oppDelta, against: winnerName })
+          // apply immediately to ratings so subsequent opponent calculations
+          // in the same match use updated values? traditionally you use base
+          // rating so we will update after loop to avoid cross influence.
+        }
+        // apply aggregated deltas to ratings now (winner vs all opponents)
+        const agg: Record<string, number> = {}
+        entries.forEach(e => { agg[e.player] = (agg[e.player] || 0) + e.delta })
+        for (const name in agg) {
+          ratings[name] = (ratings[name] ?? 1500) + agg[name]
+        }
+      }
+      result[g.id] = entries
+    }
+    return result
+  }, [games])
+
+  // Per-player list of historical rating changes, used when viewing a specific
+  // player's history on the ELO tab. Mirrors the logic above but flattens the
+  // pairwise deltas into per-player arrays and captures a formatted date string.
+  const perPlayerHistory = useMemo((): Record<string, {date: string; delta: number; against: string; rating: number}[]> => {
+    const sorted = [...games].slice().sort((a, b) => {
+      const ta = a.timestamp?.seconds ?? 0
+      const tb = b.timestamp?.seconds ?? 0
+      return ta - tb
+    })
+
+    const K = 32
+    const ratings: Record<string, number> = {}
+    const out: Record<string, {date: string; delta: number; against: string; rating: number}[]> = {}
+
+    for (const g of sorted) {
+      const gameDate = (() => {
+        if (!g.timestamp) return "-"
+        const d = new Date(g.timestamp.seconds * 1000)
+        return d.toLocaleDateString(language === "ru" ? "ru-RU" : "en-US", {
+          day: "2-digit", month: "2-digit",
+        }) + " " + d.toLocaleTimeString(language === "ru" ? "ru-RU" : "en-US", {
+          hour: "2-digit", minute: "2-digit",
+        })
+      })()
+
+      const winnerName = g.winner
+      if (winnerName) {
+        const opponents = g.players.filter(p => p.name !== winnerName)
+        const entries: PairwiseDelta[] = []
+        for (const opp of opponents) {
+          const winnerElo = ratings[winnerName] ?? 1500
+          const oppElo = ratings[opp.name] ?? 1500
+          const expectedWinner = 1 / (1 + Math.pow(10, (oppElo - winnerElo) / 400))
+          const expectedOpp = 1 - expectedWinner
+          const winDelta = Math.round(K * (1 - expectedWinner))
+          const oppDelta = Math.round(-K * expectedOpp)
+          entries.push({ player: winnerName, delta: winDelta, against: opp.name })
+          entries.push({ player: opp.name, delta: oppDelta, against: winnerName })
+        }
+        // update ratings same as above
+        const agg: Record<string, number> = {}
+        entries.forEach(e => { agg[e.player] = (agg[e.player] || 0) + e.delta })
+        for (const name in agg) {
+          ratings[name] = (ratings[name] ?? 1500) + agg[name]
+        }
+
+        // record into per-player output; include rating after result
+        entries.forEach(e => {
+          const arr = out[e.player] || []
+          const resultingRating = ratings[e.player] ?? 1500
+          arr.push({ date: gameDate, delta: e.delta, against: e.against, rating: resultingRating })
+          out[e.player] = arr
+        })
+      }
+    }
+    return out
+  }, [games, language])
+
   const monthGroups = useMemo((): MonthGroup[] => {
     const map = new Map<string, SavedGame[]>()
     const months = language === "ru"
@@ -338,6 +440,13 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
     }
   }, [pendingRestoreXml, userId, t, reloadGames])
 
+  // prepare sorted per-player history when needed (descending by date)
+  const sortedHistory = useMemo(() => {
+    if (!selectedPlayer) return [] as {date:string;delta:number;against:string;rating:number}[]
+    const arr = perPlayerHistory[selectedPlayer] || []
+    return [...arr].sort((a, b) => b.date.localeCompare(a.date))
+  }, [selectedPlayer, perPlayerHistory])
+
   // ── Share rating (adaptive: mobile=image via Web Share, desktop=copy text) ──
   const isMobileOrTablet = typeof window !== "undefined" && (window.innerWidth <= 1024 || "ontouchstart" in window)
 
@@ -371,8 +480,17 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
   }, [rankings, language, t, isMobileOrTablet])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <Card className="w-full max-w-lg bg-card border-border max-h-[90vh] flex flex-col">
+    <>
+      {showPlayerHistory && selectedPlayer && (
+        <PlayerHistoryModal
+          player={selectedPlayer}
+          history={sortedHistory}
+          onClose={() => setShowPlayerHistory(false)}
+          t={t}
+        />
+      )}
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+        <Card className="w-full max-w-lg bg-card border-border max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
@@ -526,7 +644,11 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
                 </thead>
                 <tbody>
                   {eloRankings.map((r, i) => (
-                    <tr key={r.name} className={`border-b border-border/20 ${i === 0 ? "text-primary" : "text-foreground"}`}>
+                    <tr
+                      key={r.name}
+                      className={`border-b border-border/20 ${i === 0 ? "text-primary" : "text-foreground"} cursor-pointer`}
+                      onClick={() => { setSelectedPlayer(r.name); setShowPlayerHistory(true); }}
+                    >
                       <td className="py-2 text-muted-foreground">{i + 1}</td>
                       <td className="py-2 font-medium truncate max-w-[100px]">{r.name}</td>
                       <td className="py-2 text-center font-medium">{r.elo}</td>
@@ -541,6 +663,7 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
               </table>
             </div>
           )}
+
 
           {/* Tab 2: Monthly history */}
           {!loading && !error && games.length > 0 && tab === "history" && (
@@ -572,7 +695,14 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
                     {isExpanded && (
                       <div className="divide-y divide-border/30">
                         {group.games.map((game) => (
-                          <GameCard key={game.id} game={game} t={t} language={language} formatDate={formatDate} />
+                          <GameCard 
+  key={game.id} 
+  game={game} 
+  t={t} 
+  language={language} 
+  formatDate={formatDate} 
+  ratingDeltas={ratingHistory[game.id] || {}} 
+/>
                         ))}
                       </div>
                     )}
@@ -655,6 +785,7 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
         )}
       </Card>
     </div>
+  </>
   )
 }
 
@@ -807,52 +938,86 @@ function generateRatingImage(
   })
 }
 
-function GameCard({ game, t, language, formatDate }: {
+
+// Separate modal showing individual player's ELO history. Shown when
+// `showPlayerHistory` is true and a `selectedPlayer` is set.
+function PlayerHistoryModal({
+  player,
+  history,
+  onClose,
+  t,
+}: {
+  player: string
+  history: { date: string; delta: number; against: string; rating: number }[]
+  onClose: () => void
+  t: ReturnType<typeof useI18n>["t"]
+}) {
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+      <Card className="w-full max-w-md bg-card border-border max-h-[80vh] overflow-auto flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+          <h3 className="text-sm font-semibold">
+            {player} {t.ratingHistoryTitle}
+          </h3>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+        <div className="p-4 overflow-x-auto">
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="text-muted-foreground border-b border-border/50">
+                <th className="text-left py-2 font-medium px-4">{t.date}</th>
+                <th className="text-right py-2 font-medium px-4">{t.eloDelta}</th>
+                <th className="text-right py-2 font-medium px-4">{t.rating}</th>
+                <th className="text-left py-2 font-medium px-4">{t.vs}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.map((h, idx) => (
+                <tr key={idx} className="border-b border-border/20">
+                  <td className="py-2 px-4">{h.date}</td>
+                  <td
+                    className={`py-2 px-4 text-right font-medium ${
+                      h.delta > 0
+                        ? "text-green-500"
+                        : h.delta < 0
+                        ? "text-red-500"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {h.delta > 0 ? "+" + h.delta : h.delta}
+                  </td>
+                  <td className="py-2 px-4 text-right font-medium">{h.rating}</td>
+                  <td className="py-2 px-4">{h.against}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+function GameCard({ game, t, language, formatDate, ratingDeltas }: {
   game: SavedGame
   t: ReturnType<typeof useI18n>["t"]
   language: string
   formatDate: (ts: { seconds: number } | null) => string
+  ratingDeltas: { player: string; delta: number; against: string }[]
 }) {
   const [expanded, setExpanded] = useState(false)
 
-  // Calculate ELO deltas for each player using standard Elo formula with K=32
+  // convert ratingDeltas list to a lookup by player name
   const eloDeltas = useMemo(() => {
-    const K = 32
-    const initialElo = 1500
-    
-    const deltas: Record<string, number> = {}
-    
-    if (game.players.length === 0) return deltas
-    
-    // Get winner and opponents
-    const winner = game.players.find(p => p.name === game.winner)
-    if (!winner) return deltas
-    
-    // For each opponent, calculate pairwise ELO update
-    const opponents = game.players.filter(p => p.name !== game.winner)
-    
-    for (const opponent of opponents) {
-      // Assuming both start at 1500 if we don't have history
-      const winnerElo = initialElo
-      const opponentElo = initialElo
-      
-      // Expected score for winner
-      const expectedWinner = 1 / (1 + Math.pow(10, (opponentElo - winnerElo) / 400))
-      
-      // Winner gets +K * (1 - expectedWinner)
-      deltas[winner.name] = (deltas[winner.name] || 0) + K * (1 - expectedWinner)
-      
-      // Opponent gets -K * expectedWinner
-      deltas[opponent.name] = (deltas[opponent.name] || 0) - K * expectedWinner
-    }
-    
-    // Round to nearest integer
-    Object.keys(deltas).forEach(name => {
-      deltas[name] = Math.round(deltas[name])
+    const m: Record<string, number> = {}
+    ratingDeltas.forEach(({ player, delta }) => {
+      m[player] = (m[player] || 0) + delta
     })
-    
-    return deltas
-  }, [game])
+    return m
+  }, [ratingDeltas])
+
 
   return (
     <div className="px-3 py-2.5 space-y-1.5">
@@ -915,6 +1080,7 @@ function GameCard({ game, t, language, formatDate }: {
               })}
             </tbody>
           </table>
+
         </div>
       )}
     </div>

@@ -130,6 +130,68 @@ export async function fetchUserGames(userId: string, count = 50): Promise<SavedG
   return games.slice(0, count)
 }
 
+/**
+ * Compute Elo ratings for a set of saved games.
+ * Returns a map from player name → rating (rounded to nearest integer).
+ *
+ * This mirrors the algorithm used in <StatsModal> and ensures that when new
+ * games are started we can bootstrap players with their current rating. The
+ * implementation sorts the games chronologically, initializes everyone at
+ * 1500, and then applies pairwise K‑factor updates exactly as in the
+ * modal logic.
+ */
+export function computeEloRatings(games: SavedGame[]): Record<string, number> {
+  const initialRating = 1500
+  const K = 32
+
+  // sort oldest first
+  const sorted = [...games].slice().sort((a, b) => {
+    const ta = a.timestamp?.seconds ?? 0
+    const tb = b.timestamp?.seconds ?? 0
+    return ta - tb
+  })
+
+  const map = new Map<string, number>()
+
+  for (const g of sorted) {
+    // make sure every player has an entry
+    for (const p of g.players) {
+      if (!map.has(p.name)) {
+        map.set(p.name, initialRating)
+      }
+    }
+
+    if (!g.winner) continue
+
+    const winnerName = g.winner
+    const baseWinnerRating = map.get(winnerName)!
+    let winnerDelta = 0
+
+    for (const p of g.players) {
+      if (p.name === winnerName) continue
+      const oppRating = map.get(p.name)!
+      // probability winner beats this opponent
+      const expectedWin = 1 / (1 + Math.pow(10, (oppRating - baseWinnerRating) / 400))
+      // opponent's expected score is the complement of expectedWin
+      const expectedLose = 1 - expectedWin
+      const delta = K * (1 - expectedWin)
+      winnerDelta += delta
+      // opponent should lose K * expectedLose (small if they were heavily
+      // outrated, not large)
+      map.set(p.name, oppRating - K * expectedLose)
+    }
+
+    // apply winner change after iterating opponents to avoid cascading effects
+    map.set(winnerName, baseWinnerRating + winnerDelta)
+  }
+
+  const out: Record<string, number> = {}
+  for (const [name, r] of map.entries()) {
+    out[name] = Math.round(r)
+  }
+  return out
+}
+
 // ── Backup: export all user games to XML string ──────────────
 export function gamesToXml(userId: string, games: SavedGame[]): string {
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")

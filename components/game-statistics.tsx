@@ -12,6 +12,8 @@ import {
 import { useI18n } from "@/lib/i18n/context"
 import type { Player, GameType, FinishMode, TotalLegs } from "@/lib/game-types"
 import { BarChart3, Share2, Info, Loader2 } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
+import { fetchUserGames, computeEloRatings } from "@/lib/game-firestore"
 
 interface GameStatisticsProps {
   players: Player[]
@@ -20,6 +22,14 @@ interface GameStatisticsProps {
   winner: Player
   totalLegs: TotalLegs
   currentLeg: number
+  /**
+   * if true, the statistics dialog will open automatically on mount
+   */
+  autoOpen?: boolean
+  /**
+   * hide the trigger button; only useful when autoOpen or when parent handles opening
+   */
+  hideTrigger?: boolean
 }
 
 interface PlayerStats {
@@ -33,11 +43,27 @@ interface PlayerStats {
   eloDelta: number
 }
 
-export function GameStatistics({ players, gameType, finishMode, winner, totalLegs, currentLeg }: GameStatisticsProps) {
+export function GameStatistics({ players, gameType, finishMode, winner, totalLegs, currentLeg, autoOpen, hideTrigger }: GameStatisticsProps) {
   const { t, language } = useI18n()
   const [open, setOpen] = useState(false)
   const [sharing, setSharing] = useState(false)
   const [canShareFiles, setCanShareFiles] = useState(false)
+
+  const { user } = useAuth()
+  const [historicalRatings, setHistoricalRatings] = useState<Record<string, number>>({})
+
+  // load historical ratings if user is signed in
+  useEffect(() => {
+    if (!user) return
+    fetchUserGames(user.uid, 1000)
+      .then((games) => {
+        const map = computeEloRatings(games)
+        setHistoricalRatings(map)
+      })
+      .catch(() => {
+        // ignore failures, just keep map empty (defaults will apply)
+      })
+  }, [user])
 
   useEffect(() => {
     const hasFileShare =
@@ -52,7 +78,6 @@ export function GameStatistics({ players, gameType, finishMode, winner, totalLeg
   // Calculate ELO deltas
   const calculateEloDeltas = (): Record<string, number> => {
     const K = 32
-    const initialElo = 1500
     const deltas: Record<string, number> = {}
     
     if (players.length === 0) return deltas
@@ -61,17 +86,21 @@ export function GameStatistics({ players, gameType, finishMode, winner, totalLeg
     const opponents = players.filter(p => p.id !== winner.id)
     
     for (const opponent of opponents) {
-      const winnerElo = initialElo
-      const opponentElo = initialElo
-      
+      // determine ratings: prefer live value, then historical lookup, then 1500
+      const winnerElo =
+        winner.rating ?? historicalRatings[winner.name] ?? 1500
+      const opponentElo =
+        opponent.rating ?? historicalRatings[opponent.name] ?? 1500
+
       // Expected score for winner
       const expectedWinner = 1 / (1 + Math.pow(10, (opponentElo - winnerElo) / 400))
-      
+      const expectedOpponent = 1 - expectedWinner
+
       // Winner gets +K * (1 - expectedWinner)
       deltas[winner.id] = (deltas[winner.id] || 0) + K * (1 - expectedWinner)
-      
-      // Opponent gets -K * expectedWinner
-      deltas[opponent.id] = (deltas[opponent.id] || 0) - K * expectedWinner
+
+      // Opponent loses K * expectedOpponent (not K * expectedWinner)
+      deltas[opponent.id] = (deltas[opponent.id] || 0) - K * expectedOpponent
     }
     
     // Round to nearest integer
@@ -318,12 +347,14 @@ export function GameStatistics({ players, gameType, finishMode, winner, totalLeg
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="secondary" className="h-10 bg-secondary text-secondary-foreground text-sm">
-          <BarChart3 className="w-4 h-4 mr-1.5" />
-          {t.viewStats}
-        </Button>
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          <Button variant="secondary" className="h-10 bg-secondary text-secondary-foreground text-sm">
+            <BarChart3 className="w-4 h-4 mr-1.5" />
+            {t.viewStats}
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="bg-card border-border max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader className="pb-2">
           <DialogTitle className="text-foreground flex items-center gap-2 text-base">
