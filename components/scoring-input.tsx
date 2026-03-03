@@ -381,12 +381,12 @@ export function ScoringInput({ playerName, currentScore, finishMode, onSubmitTur
         {inputMode === "buttons" ? (
           <>
             {/* High Value Buttons (15-20) */}
-            <div className="grid grid-cols-6 gap-1">
+            <div className="grid grid-cols-6 gap-1.5">
               {HIGH_VALUES.map((value) => (
                 <Button
                   key={value}
                   variant="secondary"
-                  className="h-8 text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 px-0"
+                  className="h-11 text-base font-semibold bg-secondary text-secondary-foreground hover:bg-secondary/80 px-0"
                   onClick={() => handleValueClick(value)}
                 >
                   {value}
@@ -395,12 +395,12 @@ export function ScoringInput({ playerName, currentScore, finishMode, onSubmitTur
             </div>
 
             {/* Low Value Buttons (1-14) */}
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-1.5">
               {LOW_VALUES.map((value) => (
                 <Button
                   key={value}
                   variant="secondary"
-                  className="h-7 text-xs font-medium bg-secondary/70 text-secondary-foreground hover:bg-secondary/50 px-0"
+                  className="h-10 text-sm font-semibold bg-secondary/70 text-secondary-foreground hover:bg-secondary/50 px-0"
                   onClick={() => handleValueClick(value)}
                 >
                   {value}
@@ -409,12 +409,12 @@ export function ScoringInput({ playerName, currentScore, finishMode, onSubmitTur
             </div>
 
             {/* Special Buttons (Bull, Bullseye, Miss) */}
-            <div className="grid grid-cols-3 gap-1">
+            <div className="grid grid-cols-3 gap-1.5">
               {SPECIAL_VALUES.map((value) => (
                 <Button
                   key={value}
                   variant="secondary"
-                  className={`h-8 text-sm font-medium ${
+                  className={`h-11 text-base font-semibold ${
                     value === 0
                       ? "bg-destructive/20 text-destructive hover:bg-destructive/30"
                       : "bg-amber-500/20 text-amber-500 hover:bg-amber-500/30"

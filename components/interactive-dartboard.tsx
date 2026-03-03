@@ -29,13 +29,26 @@ const DESKTOP = {
 //   Single:  0.443 -> 0.722
 //   Double:  0.722 -> 1.000
 const MOBILE = {
-  BULLSEYE_R: 0.07,
-  BULL_R: 0.165,
+  BULLSEYE_R: 0.1,
+  BULL_R: 0.22,
   TRIPLE_START: 0.165,  // starts at bull outer edge (no gap)
-  TRIPLE_END: 0.443,
+  TRIPLE_END: 0.48,
   SINGLE_START: 0.443,
-  DOUBLE_START: 0.722,
+  DOUBLE_START: 0.7,
   DOUBLE_END: 1.0,
+}
+
+const HIT_ASSIST = {
+  desktop: {
+    bullseye: 0.016,
+    bull: 0.02,
+    ring: 0.03,
+  },
+  mobile: {
+    bullseye: 0.03,
+    bull: 0.04,
+    ring: 0.05,
+  },
 }
 
 // ── Constants ─────────────────────────────────────────────
@@ -95,12 +108,11 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
     return () => window.removeEventListener("resize", check)
   }, [])
 
-  const Z = isMobile ? MOBILE : null
-  const D = DESKTOP
-
   // ── Hit detection ─────────────────────────────────────────
   const getHit = useCallback(
     (clientX: number, clientY: number): HitInfo | null => {
+      const Z = isMobile ? MOBILE : null
+      const D = DESKTOP
       if (!svgRef.current) return null
       const rect = svgRef.current.getBoundingClientRect()
       const scale = BOARD_SIZE / rect.width
@@ -111,15 +123,16 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
 
       if (norm > 1.02) return null
 
-      const bullseyeR = Z ? Z.BULLSEYE_R : D.BULLSEYE_R
-      const bullR = Z ? Z.BULL_R : D.BULL_R
+      const bullseyeR = Z ? Z.BULLSEYE_R : DESKTOP.BULLSEYE_R
+      const bullR = Z ? Z.BULL_R : DESKTOP.BULL_R
+      const assist = isMobile ? HIT_ASSIST.mobile : HIT_ASSIST.desktop
 
       // Bullseye (50)
-      if (norm <= bullseyeR) {
+      if (norm <= bullseyeR + assist.bullseye) {
         return { value: 50, multiplier: 1, label: "Bull", zone: "bullseye" }
       }
       // Bull (25)
-      if (norm <= bullR) {
+      if (norm <= bullR + assist.bull) {
         return { value: 25, multiplier: 1, label: "25", zone: "bull" }
       }
 
@@ -129,6 +142,79 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
       const adjusted = (angle + SECTOR_ANGLE / 2) % (2 * Math.PI)
       const idx = Math.floor(adjusted / SECTOR_ANGLE)
       const sector = SECTORS[idx]
+
+      type ZoneCandidate = {
+        zone: "innerSingle" | "triple" | "outerSingle" | "double"
+        multiplier: 1 | 2 | 3
+        center: number
+        halfWidth: number
+      }
+
+      const candidates: ZoneCandidate[] = Z
+        ? [
+            {
+              zone: "triple",
+              multiplier: 3,
+              center: (Z.TRIPLE_START + Z.TRIPLE_END) / 2,
+              halfWidth: (Z.TRIPLE_END - Z.TRIPLE_START) / 2 + assist.ring,
+            },
+            {
+              zone: "outerSingle",
+              multiplier: 1,
+              center: (Z.TRIPLE_END + Z.DOUBLE_START) / 2,
+              halfWidth: (Z.DOUBLE_START - Z.TRIPLE_END) / 2 + assist.ring,
+            },
+            {
+              zone: "double",
+              multiplier: 2,
+              center: (Z.DOUBLE_START + Z.DOUBLE_END) / 2,
+              halfWidth: (Z.DOUBLE_END - Z.DOUBLE_START) / 2 + assist.ring,
+            },
+          ]
+        : [
+            {
+              zone: "innerSingle",
+              multiplier: 1,
+              center: (bullR + DESKTOP.TRIPLE_START) / 2,
+              halfWidth: (DESKTOP.TRIPLE_START - bullR) / 2 + assist.ring,
+            },
+            {
+              zone: "triple",
+              multiplier: 3,
+              center: (DESKTOP.TRIPLE_START + DESKTOP.TRIPLE_END) / 2,
+              halfWidth: (DESKTOP.TRIPLE_END - DESKTOP.TRIPLE_START) / 2 + assist.ring,
+            },
+            {
+              zone: "outerSingle",
+              multiplier: 1,
+              center: (DESKTOP.TRIPLE_END + DESKTOP.DOUBLE_START) / 2,
+              halfWidth: (DESKTOP.DOUBLE_START - DESKTOP.TRIPLE_END) / 2 + assist.ring,
+            },
+            {
+              zone: "double",
+              multiplier: 2,
+              center: (DESKTOP.DOUBLE_START + DESKTOP.DOUBLE_END) / 2,
+              halfWidth: (DESKTOP.DOUBLE_END - DESKTOP.DOUBLE_START) / 2 + assist.ring,
+            },
+          ]
+
+      const ranked = candidates
+        .map((candidate) => {
+          const diff = Math.abs(norm - candidate.center)
+          return { candidate, diff }
+        })
+        .filter(({ candidate, diff }) => diff <= candidate.halfWidth)
+        .sort((a, b) => a.diff - b.diff)
+
+      if (ranked.length > 0) {
+        const chosen = ranked[0].candidate
+        return {
+          value: sector,
+          multiplier: chosen.multiplier,
+          label: chosen.multiplier === 3 ? `T${sector}` : chosen.multiplier === 2 ? `D${sector}` : `${sector}`,
+          zone: chosen.zone,
+        }
+      }
 
       if (Z) {
         // MOBILE hit detection: triple starts right at bull edge
@@ -142,18 +228,18 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
       }
 
       // DESKTOP hit detection (standard):
-      if (norm <= D.TRIPLE_START) {
+      if (norm <= DESKTOP.TRIPLE_START) {
         return { value: sector, multiplier: 1, label: `${sector}`, zone: "innerSingle" }
       }
-      if (norm <= D.TRIPLE_END) {
+      if (norm <= DESKTOP.TRIPLE_END) {
         return { value: sector, multiplier: 3, label: `T${sector}`, zone: "triple" }
       }
-      if (norm <= D.DOUBLE_START) {
+      if (norm <= DESKTOP.DOUBLE_START) {
         return { value: sector, multiplier: 1, label: `${sector}`, zone: "outerSingle" }
       }
       return { value: sector, multiplier: 2, label: `D${sector}`, zone: "double" }
     },
-    [Z, D],
+    [isMobile],
   )
 
   const handlePointerMove = useCallback(
@@ -186,11 +272,11 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
   // ── SVG rendering ───────────────────────────────────────
   const sectors = useMemo(() => {
     const result: React.ReactNode[] = []
-    const bullR = isMobile ? MOBILE.BULL_R : D.BULL_R
-    const tripleStart = isMobile ? MOBILE.TRIPLE_START : D.TRIPLE_START
-    const tripleEnd = isMobile ? MOBILE.TRIPLE_END : D.TRIPLE_END
-    const doubleStart = isMobile ? MOBILE.DOUBLE_START : D.DOUBLE_START
-    const doubleEnd = isMobile ? MOBILE.DOUBLE_END : D.DOUBLE_END
+    const bullR = isMobile ? MOBILE.BULL_R : DESKTOP.BULL_R
+    const tripleStart = isMobile ? MOBILE.TRIPLE_START : DESKTOP.TRIPLE_START
+    const tripleEnd = isMobile ? MOBILE.TRIPLE_END : DESKTOP.TRIPLE_END
+    const doubleStart = isMobile ? MOBILE.DOUBLE_START : DESKTOP.DOUBLE_START
+    const doubleEnd = isMobile ? MOBILE.DOUBLE_END : DESKTOP.DOUBLE_END
 
     for (let i = 0; i < 20; i++) {
       const a1 = -Math.PI / 2 + i * SECTOR_ANGLE - SECTOR_ANGLE / 2
@@ -242,7 +328,7 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
     }
 
     return result
-  }, [isMobile, D])
+  }, [isMobile])
 
   const numberLabels = useMemo(() => {
     return SECTORS.map((num, i) => {
@@ -303,7 +389,7 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
       <svg
         ref={svgRef}
         viewBox={`0 0 ${BOARD_SIZE} ${BOARD_SIZE}`}
-        className="w-full max-w-[340px] aspect-square cursor-pointer touch-manipulation select-none"
+        className="w-full max-w-[420px] aspect-square cursor-pointer touch-manipulation select-none"
         style={{ shapeRendering: "geometricPrecision" }}
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
@@ -321,7 +407,7 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
         <circle
           cx={CENTER}
           cy={CENTER}
-          r={R * (isMobile ? MOBILE.BULL_R : D.BULL_R)}
+          r={R * (isMobile ? MOBILE.BULL_R : DESKTOP.BULL_R)}
           fill="#1e8449"
           stroke="#333"
           strokeWidth={0.8}
@@ -331,7 +417,7 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
         <circle
           cx={CENTER}
           cy={CENTER}
-          r={R * (isMobile ? MOBILE.BULLSEYE_R : D.BULLSEYE_R)}
+          r={R * (isMobile ? MOBILE.BULLSEYE_R : DESKTOP.BULLSEYE_R)}
           fill="#c0392b"
           stroke="#333"
           strokeWidth={0.8}
@@ -389,7 +475,7 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
       <button
         type="button"
         onClick={() => onDartSelected(0, 1)}
-        className="w-full max-w-[340px] h-10 rounded-lg bg-destructive/20 text-destructive text-sm font-semibold hover:bg-destructive/30 active:scale-[0.98] transition-all select-none"
+        className="w-full max-w-[420px] h-12 rounded-lg bg-destructive/20 text-destructive text-base font-semibold hover:bg-destructive/30 active:scale-[0.98] transition-all select-none"
       >
         {t.dartboardMiss}
       </button>
