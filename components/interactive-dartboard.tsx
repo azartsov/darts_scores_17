@@ -99,6 +99,8 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
   const [hovered, setHovered] = useState<HitInfo | null>(null)
   const [flash, setFlash] = useState<{ x: number; y: number; label: string } | null>(null)
   const [isMobile, setIsMobile] = useState(false)
+  const [touchPoint, setTouchPoint] = useState<{ x: number; y: number } | null>(null)
+  const [touchPreview, setTouchPreview] = useState<HitInfo | null>(null)
   const { t } = useI18n()
 
   useEffect(() => {
@@ -112,7 +114,6 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
   const getHit = useCallback(
     (clientX: number, clientY: number): HitInfo | null => {
       const Z = isMobile ? MOBILE : null
-      const D = DESKTOP
       if (!svgRef.current) return null
       const rect = svgRef.current.getBoundingClientRect()
       const scale = BOARD_SIZE / rect.width
@@ -248,26 +249,85 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
   )
   const handlePointerLeave = useCallback(() => setHovered(null), [])
 
-  const handleClick = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
-      const hit = getHit(e.clientX, e.clientY)
-      if (!hit) return
+  const hitKey = (hit: HitInfo | null): string | null => {
+    if (!hit) return null
+    return `${hit.value}-${hit.multiplier}-${hit.zone}`
+  }
+
+  const commitHit = useCallback(
+    (hit: HitInfo, clientX: number, clientY: number) => {
       onDartSelected(hit.value, hit.multiplier)
 
       const rect = svgRef.current?.getBoundingClientRect()
       if (rect) {
         const scale = BOARD_SIZE / rect.width
-        const fx = (e.clientX - rect.left) * scale
-        const fy = (e.clientY - rect.top) * scale
+        const fx = (clientX - rect.left) * scale
+        const fy = (clientY - rect.top) * scale
         const score = hit.value === 50 || hit.value === 25
-            ? hit.value
-            : hit.value * hit.multiplier
+          ? hit.value
+          : hit.value * hit.multiplier
         setFlash({ x: fx, y: fy, label: `${score}` })
         setTimeout(() => setFlash(null), 600)
       }
     },
-    [getHit, onDartSelected],
+    [onDartSelected],
   )
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      if (isMobile) return
+      const hit = getHit(e.clientX, e.clientY)
+      if (!hit) return
+      commitHit(hit, e.clientX, e.clientY)
+    },
+    [commitHit, getHit, isMobile],
+  )
+
+  const handleTouchStart = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    const touch = e.touches[0]
+    if (!touch) return
+    const hit = getHit(touch.clientX, touch.clientY)
+    setTouchPoint({ x: touch.clientX, y: touch.clientY })
+    setHovered(hit)
+  }, [getHit])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    const touch = e.touches[0]
+    if (!touch) return
+    e.preventDefault()
+    const hit = getHit(touch.clientX, touch.clientY)
+    setTouchPoint({ x: touch.clientX, y: touch.clientY })
+    setHovered(hit)
+  }, [getHit])
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    const touch = e.changedTouches[0]
+    if (!touch) {
+      setTouchPoint(null)
+      return
+    }
+
+    const hit = getHit(touch.clientX, touch.clientY)
+    if (!hit) {
+      setTouchPoint(null)
+      setHovered(null)
+      setTouchPreview(null)
+      return
+    }
+
+    const currentKey = hitKey(hit)
+    const previewKey = hitKey(touchPreview)
+
+    if (currentKey && currentKey === previewKey) {
+      commitHit(hit, touch.clientX, touch.clientY)
+      setTouchPreview(null)
+    } else {
+      setTouchPreview(hit)
+    }
+
+    setTouchPoint(null)
+    setHovered(hit)
+  }, [commitHit, getHit, touchPreview])
 
   // ── SVG rendering ───────────────────────────────────────
   const sectors = useMemo(() => {
@@ -394,6 +454,13 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
         onClick={handleClick}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={() => {
+          setTouchPoint(null)
+          setHovered(null)
+        }}
         role="img"
         aria-label="Interactive dartboard"
       >
@@ -470,6 +537,40 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
           </g>
         )}
       </svg>
+
+      {touchPoint && hovered && (
+        <div
+          className="fixed pointer-events-none z-[120]"
+          style={{
+            left: touchPoint.x,
+            top: touchPoint.y - 84,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <div className="w-[96px] h-[96px] rounded-full border-2 border-primary/70 bg-card/95 backdrop-blur-sm shadow-2xl flex flex-col items-center justify-center">
+            <div className="text-[11px] text-muted-foreground leading-none">{hovered.zone}</div>
+            <div className="text-2xl font-extrabold leading-none text-primary mt-1">{hovered.label}</div>
+            <div className="text-xs text-foreground/90 font-semibold mt-1">
+              {hovered.value === 50 || hovered.value === 25
+                ? hovered.value
+                : hovered.value * hovered.multiplier}
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-[26px] h-[26px] rounded-full border border-primary/40" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isMobile && touchPreview && (
+        <div className="text-[11px] text-amber-400 font-medium bg-amber-500/15 border border-amber-500/30 rounded-md px-2 py-1">
+          {touchPreview.label} → {touchPreview.value === 50 || touchPreview.value === 25
+            ? touchPreview.value
+            : touchPreview.value * touchPreview.multiplier}
+          {"  ·  "}
+          Tap same zone again to confirm
+        </div>
+      )}
 
       {/* Miss button */}
       <button
