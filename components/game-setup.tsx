@@ -1,8 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type DragEvent, type TouchEvent } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { GameType, Player, FinishMode, TotalLegs } from "@/lib/game-types"
 import { useI18n } from "@/lib/i18n/context"
@@ -41,6 +40,10 @@ export function GameSetup({ onStartGame }: GameSetupProps) {
     formatString(t.playerPlaceholder, { num: 2 }),
   ])
   const [newPlayerName, setNewPlayerName] = useState("")
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  const [isTouchDragging, setIsTouchDragging] = useState(false)
+  const [touchPoint, setTouchPoint] = useState<{ x: number; y: number } | null>(null)
 
   const legsOptions: TotalLegs[] = [1, 3, 5, 7, 9]
   const legsToWin = Math.ceil(totalLegs / 2)
@@ -62,6 +65,82 @@ export function GameSetup({ onStartGame }: GameSetupProps) {
     const updated = [...playerNames]
     updated[index] = name
     setPlayerNames(updated)
+  }
+
+  const movePlayer = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return
+    setPlayerNames((prev) => {
+      const updated = [...prev]
+      const [moved] = updated.splice(fromIndex, 1)
+      updated.splice(toIndex, 0, moved)
+      return updated
+    })
+  }
+
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index)
+    setDragOverIndex(index)
+  }
+
+  const handleDragOver = (event: DragEvent<HTMLDivElement>, index: number) => {
+    event.preventDefault()
+    if (dragOverIndex !== index) setDragOverIndex(index)
+  }
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>, index: number) => {
+    event.preventDefault()
+    if (draggedIndex === null) return
+    movePlayer(draggedIndex, index)
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
+  const findIndexFromPoint = (clientX: number, clientY: number): number | null => {
+    const target = document.elementFromPoint(clientX, clientY)
+    if (!target) return null
+    const row = target.closest("[data-player-index]")
+    if (!row) return null
+    const value = row.getAttribute("data-player-index")
+    if (!value) return null
+    const parsed = Number.parseInt(value, 10)
+    return Number.isNaN(parsed) ? null : parsed
+  }
+
+  const handleTouchStart = (event: TouchEvent<HTMLButtonElement>, index: number) => {
+    const touch = event.touches[0]
+    setIsTouchDragging(true)
+    setDraggedIndex(index)
+    setDragOverIndex(index)
+    if (touch) {
+      setTouchPoint({ x: touch.clientX, y: touch.clientY })
+    }
+  }
+
+  const handleTouchMove = (event: TouchEvent<HTMLButtonElement>) => {
+    if (!isTouchDragging) return
+    const touch = event.touches[0]
+    if (!touch) return
+    event.preventDefault()
+    setTouchPoint({ x: touch.clientX, y: touch.clientY })
+    const overIndex = findIndexFromPoint(touch.clientX, touch.clientY)
+    if (overIndex !== null && overIndex !== dragOverIndex) {
+      setDragOverIndex(overIndex)
+    }
+  }
+
+  const handleTouchEnd = () => {
+    if (draggedIndex !== null && dragOverIndex !== null) {
+      movePlayer(draggedIndex, dragOverIndex)
+    }
+    setIsTouchDragging(false)
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+    setTouchPoint(null)
   }
 
   const handleStartGame = () => {
@@ -313,8 +392,31 @@ export function GameSetup({ onStartGame }: GameSetupProps) {
             </label>
             <div className="space-y-2">
               {playerNames.map((name, index) => (
-                <div key={index} className="flex items-center gap-2 bg-secondary/50 rounded-lg p-2">
-                  <GripVertical className="w-4 h-4 text-muted-foreground" />
+                <div
+                  key={`${name}-${index}`}
+                  data-player-index={index}
+                  onDragOver={(event) => handleDragOver(event, index)}
+                  onDrop={(event) => handleDrop(event, index)}
+                  className={`flex items-center gap-2 rounded-lg p-2 transition-colors ${
+                    dragOverIndex === index ? "bg-primary/15 ring-1 ring-primary/40" : "bg-secondary/50"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    draggable
+                    onDragStart={() => handleDragStart(index)}
+                    onDragEnd={handleDragEnd}
+                    onTouchStart={(event) => handleTouchStart(event, index)}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                    onTouchCancel={handleTouchEnd}
+                    className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+                    aria-label={`Drag player ${index + 1}`}
+                    title="Drag to reorder"
+                    style={{ touchAction: "none" }}
+                  >
+                    <GripVertical className="w-4 h-4" />
+                  </button>
                   <span className="text-xs text-muted-foreground w-6">#{index + 1}</span>
                   <PlayerNameInput
                     value={name}
@@ -368,6 +470,21 @@ export function GameSetup({ onStartGame }: GameSetupProps) {
           </Button>
         </CardContent>
       </Card>
+
+      {isTouchDragging && draggedIndex !== null && touchPoint && (
+        <div
+          className="fixed z-[100] pointer-events-none transition-transform duration-100 ease-out will-change-transform"
+          style={{ left: touchPoint.x, top: touchPoint.y, transform: "translate(-50%, -50%) scale(1.03)" }}
+        >
+          <div className="min-w-[210px] max-w-[300px] flex items-center gap-2 rounded-lg border border-primary/40 bg-card/95 backdrop-blur-sm shadow-xl px-3 py-2 transition-all duration-150 ease-out opacity-100">
+            <GripVertical className="w-4 h-4 text-primary" />
+            <span className="text-xs text-muted-foreground">#{draggedIndex + 1}</span>
+            <span className="truncate text-sm font-medium text-foreground">
+              {playerNames[draggedIndex] || formatString(t.playerPlaceholder, { num: draggedIndex + 1 })}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -231,31 +231,42 @@ export function parseBackupXml(xmlString: string): { userId: string; games: Omit
   const parser = new DOMParser()
   const xmlDoc = parser.parseFromString(xmlString, "text/xml")
 
-  const parseError = xmlDoc.querySelector("parsererror")
+  const firstByTag = (parent: Document | Element, tagName: string): Element | null => {
+    const list = parent.getElementsByTagName(tagName)
+    return list.length > 0 ? list[0] : null
+  }
+
+  const textByTag = (parent: Document | Element, tagName: string): string => {
+    return firstByTag(parent, tagName)?.textContent || ""
+  }
+
+  const parseError = firstByTag(xmlDoc, "parsererror")
   if (parseError) throw new Error("Invalid XML format")
 
   const root = xmlDoc.documentElement
   if (root.tagName !== "dartsBackup") throw new Error("Not a darts backup file")
 
   const userId = root.getAttribute("userId") || ""
-  const gameElements = xmlDoc.querySelectorAll("games > game")
+  const gamesRoot = firstByTag(root, "games")
+  const gameElements = gamesRoot ? Array.from(gamesRoot.getElementsByTagName("game")) : []
   const games: Omit<SavedGame, "id">[] = []
 
   gameElements.forEach((gameEl) => {
-    const tsText = gameEl.querySelector("timestamp")?.textContent || ""
+    const tsText = textByTag(gameEl, "timestamp")
     const tsDate = tsText ? new Date(tsText) : null
 
-    const playerElements = gameEl.querySelectorAll("players > player")
+    const playersRoot = firstByTag(gameEl, "players")
+    const playerElements = playersRoot ? Array.from(playersRoot.getElementsByTagName("player")) : []
     const players: SavedPlayerStats[] = []
     playerElements.forEach((pEl) => {
-      const coPctText = pEl.querySelector("checkoutPercentage")?.textContent
+      const coPctText = textByTag(pEl, "checkoutPercentage")
       players.push({
         name: pEl.getAttribute("name") || "",
-        legsWon: parseInt(pEl.querySelector("legsWon")?.textContent || "0", 10),
-        average: parseFloat(pEl.querySelector("average")?.textContent || "0"),
-        totalDarts: parseInt(pEl.querySelector("totalDarts")?.textContent || "0", 10),
-        remaining: parseInt(pEl.querySelector("remaining")?.textContent || "0", 10),
-        busts: parseInt(pEl.querySelector("busts")?.textContent || "0", 10),
+        legsWon: parseInt(textByTag(pEl, "legsWon") || "0", 10),
+        average: parseFloat(textByTag(pEl, "average") || "0"),
+        totalDarts: parseInt(textByTag(pEl, "totalDarts") || "0", 10),
+        remaining: parseInt(textByTag(pEl, "remaining") || "0", 10),
+        busts: parseInt(textByTag(pEl, "busts") || "0", 10),
         checkoutPct: coPctText ? parseFloat(coPctText) : null,
       })
     })
@@ -263,10 +274,10 @@ export function parseBackupXml(xmlString: string): { userId: string; games: Omit
     games.push({
       userId,
       timestamp: tsDate ? { seconds: Math.floor(tsDate.getTime() / 1000) } : null,
-      gameMode: gameEl.querySelector("gameMode")?.textContent || "",
-      finishMode: gameEl.querySelector("finishMode")?.textContent || "",
-      legsPlayed: parseInt(gameEl.querySelector("legsPlayed")?.textContent || "0", 10),
-      winner: gameEl.querySelector("winner")?.textContent || "",
+      gameMode: textByTag(gameEl, "gameMode"),
+      finishMode: textByTag(gameEl, "finishMode"),
+      legsPlayed: parseInt(textByTag(gameEl, "legsPlayed") || "0", 10),
+      winner: textByTag(gameEl, "winner"),
       players,
     })
   })
