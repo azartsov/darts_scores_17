@@ -96,12 +96,17 @@ interface HitInfo {
 
 export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardProps) {
   const svgRef = useRef<SVGSVGElement>(null)
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const touchActiveRef = useRef(false)
+  const touchCommittedRef = useRef(false)
+  const latestTouchRef = useRef<{ hit: HitInfo | null; x: number; y: number } | null>(null)
   const [hovered, setHovered] = useState<HitInfo | null>(null)
   const [flash, setFlash] = useState<{ x: number; y: number; label: string } | null>(null)
   const [isMobile, setIsMobile] = useState(false)
   const [touchPoint, setTouchPoint] = useState<{ x: number; y: number } | null>(null)
-  const [touchPreview, setTouchPreview] = useState<HitInfo | null>(null)
   const { t } = useI18n()
+
+  const HOLD_TO_CONFIRM_MS = 330
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth <= 1024)
@@ -249,10 +254,12 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
   )
   const handlePointerLeave = useCallback(() => setHovered(null), [])
 
-  const hitKey = (hit: HitInfo | null): string | null => {
-    if (!hit) return null
-    return `${hit.value}-${hit.multiplier}-${hit.zone}`
-  }
+  const clearHoldTimer = useCallback(() => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current)
+      holdTimerRef.current = null
+    }
+  }, [])
 
   const commitHit = useCallback(
     (hit: HitInfo, clientX: number, clientY: number) => {
@@ -273,6 +280,25 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
     [onDartSelected],
   )
 
+  const scheduleHoldCommit = useCallback((hit: HitInfo | null) => {
+    clearHoldTimer()
+    if (!hit) return
+
+    holdTimerRef.current = setTimeout(() => {
+      if (!touchActiveRef.current || touchCommittedRef.current) return
+      const latest = latestTouchRef.current
+      if (!latest?.hit) return
+
+      commitHit(latest.hit, latest.x, latest.y)
+      touchCommittedRef.current = true
+      setTouchPoint(null)
+
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        navigator.vibrate(20)
+      }
+    }, HOLD_TO_CONFIRM_MS)
+  }, [clearHoldTimer, commitHit])
+
   const handleClick = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
       if (isMobile) return
@@ -287,21 +313,37 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
     const touch = e.touches[0]
     if (!touch) return
     const hit = getHit(touch.clientX, touch.clientY)
+    touchActiveRef.current = true
+    touchCommittedRef.current = false
+    latestTouchRef.current = { hit, x: touch.clientX, y: touch.clientY }
     setTouchPoint({ x: touch.clientX, y: touch.clientY })
     setHovered(hit)
-  }, [getHit])
+    scheduleHoldCommit(hit)
+  }, [getHit, scheduleHoldCommit])
 
   const handleTouchMove = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
     const touch = e.touches[0]
     if (!touch) return
     e.preventDefault()
     const hit = getHit(touch.clientX, touch.clientY)
+    const previousKey = latestTouchRef.current?.hit
+      ? `${latestTouchRef.current.hit.value}-${latestTouchRef.current.hit.multiplier}-${latestTouchRef.current.hit.zone}`
+      : null
+    const nextKey = hit ? `${hit.value}-${hit.multiplier}-${hit.zone}` : null
+
+    latestTouchRef.current = { hit, x: touch.clientX, y: touch.clientY }
     setTouchPoint({ x: touch.clientX, y: touch.clientY })
     setHovered(hit)
-  }, [getHit])
+    if (!touchCommittedRef.current && previousKey !== nextKey) {
+      scheduleHoldCommit(hit)
+    }
+  }, [getHit, scheduleHoldCommit])
 
   const handleTouchEnd = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
     const touch = e.changedTouches[0]
+    clearHoldTimer()
+    touchActiveRef.current = false
+
     if (!touch) {
       setTouchPoint(null)
       return
@@ -311,23 +353,16 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
     if (!hit) {
       setTouchPoint(null)
       setHovered(null)
-      setTouchPreview(null)
+      latestTouchRef.current = null
+      touchCommittedRef.current = false
       return
-    }
-
-    const currentKey = hitKey(hit)
-    const previewKey = hitKey(touchPreview)
-
-    if (currentKey && currentKey === previewKey) {
-      commitHit(hit, touch.clientX, touch.clientY)
-      setTouchPreview(null)
-    } else {
-      setTouchPreview(hit)
     }
 
     setTouchPoint(null)
     setHovered(hit)
-  }, [commitHit, getHit, touchPreview])
+    latestTouchRef.current = null
+    touchCommittedRef.current = false
+  }, [clearHoldTimer, getHit])
 
   // ── SVG rendering ───────────────────────────────────────
   const sectors = useMemo(() => {
@@ -458,6 +493,10 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onTouchCancel={() => {
+          clearHoldTimer()
+          touchActiveRef.current = false
+          touchCommittedRef.current = false
+          latestTouchRef.current = null
           setTouchPoint(null)
           setHovered(null)
         }}
@@ -562,13 +601,9 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
         </div>
       )}
 
-      {isMobile && touchPreview && (
+      {isMobile && (
         <div className="text-[11px] text-amber-400 font-medium bg-amber-500/15 border border-amber-500/30 rounded-md px-2 py-1">
-          {touchPreview.label} → {touchPreview.value === 50 || touchPreview.value === 25
-            ? touchPreview.value
-            : touchPreview.value * touchPreview.multiplier}
-          {"  ·  "}
-          Tap same zone again to confirm
+          Hold on target to confirm
         </div>
       )}
 

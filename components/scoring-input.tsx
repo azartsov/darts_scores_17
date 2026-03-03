@@ -32,6 +32,7 @@ export function ScoringInput({ playerName, currentScore, finishMode, onSubmitTur
     createEmptyDart(),
   ])
   const [activeDart, setActiveDart] = useState<0 | 1 | 2>(0)
+  const [animatedDart, setAnimatedDart] = useState<0 | 1 | 2 | null>(null)
   const [inputMode, setInputMode] = useState<InputMode>("buttons")
 
   // Load saved input mode preference
@@ -132,10 +133,14 @@ export function ScoringInput({ playerName, currentScore, finishMode, onSubmitTur
   // Respects activeDart so users can click a dart card, then pick a value on the board.
   const handleDartboardInput = useCallback((value: number, multiplier: 1 | 2 | 3) => {
     const state: DartState = value === 0 ? "miss" : "scored"
+    const currentIndex = activeDart
+
+    setAnimatedDart(currentIndex)
+    setTimeout(() => setAnimatedDart((prev) => (prev === currentIndex ? null : prev)), 480)
 
     setDarts(prev => {
       const newDarts = [...prev] as [DartInput, DartInput, DartInput]
-      newDarts[activeDart] = { value, multiplier, state }
+      newDarts[currentIndex] = { value, multiplier, state }
       return newDarts
     })
 
@@ -343,7 +348,9 @@ export function ScoringInput({ playerName, currentScore, finishMode, onSubmitTur
                 <button
                   type="button"
                   onClick={() => handleDartCardTap(index as 0 | 1 | 2)}
-                  className={`relative w-full px-1.5 py-1 rounded-lg text-center transition-all select-none border-2 ${getDartStateStyle(dart, isActive)}`}
+                  className={`relative w-full px-1.5 py-1 rounded-lg text-center transition-all select-none border-2 ${getDartStateStyle(dart, isActive)} ${
+                    animatedDart === index ? "scale-[1.06] ring-4 ring-primary/40 shadow-[0_0_24px_rgba(59,130,246,0.45)]" : ""
+                  }`}
                 >
                   <div className={`text-[9px] leading-none ${isActive ? "opacity-90" : "opacity-60"}`}>
                     {t.dart} {index + 1}
