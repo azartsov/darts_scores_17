@@ -124,6 +124,10 @@ export interface Translations {
   inputModeDartboard: string
   switchInputMode: string
   dartboardMiss: string
+  holdToConfirmHint: string
+  inputSettings: string
+  touchHoldConfirmDelay: string
+  touchHoldDelayNoHint: string
 
   // Dart States
   dartEmpty: string
@@ -326,6 +330,10 @@ export const translations: Record<Language, Translations> = {
     inputModeDartboard: "Board",
     switchInputMode: "Switch input",
     dartboardMiss: "Miss",
+    holdToConfirmHint: "Hold on target to confirm ({ms} ms)",
+    inputSettings: "Input settings",
+    touchHoldConfirmDelay: "Touch hold confirm delay",
+    touchHoldDelayNoHint: "0 ms (no hint)",
 
     // Dart States
     dartEmpty: "-",
@@ -534,6 +542,10 @@ export const translations: Record<Language, Translations> = {
     inputModeDartboard: "Мишень",
     switchInputMode: "Сменить ввод",
     dartboardMiss: "Мимо",
+    holdToConfirmHint: "Удерживайте цель для подтверждения ({ms} мс)",
+    inputSettings: "Настройки ввода",
+    touchHoldConfirmDelay: "Задержка подтверждения удержанием",
+    touchHoldDelayNoHint: "0 мс (без подсказки)",
 
     // Dart States
     dartEmpty: "-",

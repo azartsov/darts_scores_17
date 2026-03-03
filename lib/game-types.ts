@@ -51,13 +51,6 @@ export interface GameState {
   startTime: number
 }
 
-// All possible single-throw values in simple mode (no doubles/triples).
-const SIMPLE_VALUES = [
-  ...Array.from({ length: 20 }, (_, i) => i + 1), // S1-S20
-  25, // Bull
-  50, // Bullseye
-]
-
 // Human-friendly label for a simple-mode value.
 function simpleLabel(v: number): string {
   if (v === 25) return "Bull"

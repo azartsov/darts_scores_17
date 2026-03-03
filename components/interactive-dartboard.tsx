@@ -6,6 +6,7 @@ import { useI18n } from "@/lib/i18n/context"
 
 interface InteractiveDartboardProps {
   onDartSelected: (value: number, multiplier: 1 | 2 | 3) => void
+  holdDelayMs?: number
 }
 
 // Standard dartboard sector layout (clockwise from top)
@@ -94,7 +95,7 @@ interface HitInfo {
   zone: string
 }
 
-export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardProps) {
+export function InteractiveDartboard({ onDartSelected, holdDelayMs = 700 }: InteractiveDartboardProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const touchActiveRef = useRef(false)
@@ -104,9 +105,9 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
   const [flash, setFlash] = useState<{ x: number; y: number; label: string } | null>(null)
   const [isMobile, setIsMobile] = useState(false)
   const [touchPoint, setTouchPoint] = useState<{ x: number; y: number } | null>(null)
-  const { t } = useI18n()
+  const { t, formatString } = useI18n()
 
-  const HOLD_TO_CONFIRM_MS = 330
+  const HOLD_TO_CONFIRM_MS = Math.min(1500, Math.max(0, holdDelayMs))
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth <= 1024)
@@ -297,7 +298,7 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
         navigator.vibrate(20)
       }
     }, HOLD_TO_CONFIRM_MS)
-  }, [clearHoldTimer, commitHit])
+  }, [HOLD_TO_CONFIRM_MS, clearHoldTimer, commitHit])
 
   const handleClick = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
@@ -316,10 +317,14 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
     touchActiveRef.current = true
     touchCommittedRef.current = false
     latestTouchRef.current = { hit, x: touch.clientX, y: touch.clientY }
-    setTouchPoint({ x: touch.clientX, y: touch.clientY })
+    if (HOLD_TO_CONFIRM_MS > 0) {
+      setTouchPoint({ x: touch.clientX, y: touch.clientY })
+    }
     setHovered(hit)
-    scheduleHoldCommit(hit)
-  }, [getHit, scheduleHoldCommit])
+    if (HOLD_TO_CONFIRM_MS > 0) {
+      scheduleHoldCommit(hit)
+    }
+  }, [HOLD_TO_CONFIRM_MS, getHit, scheduleHoldCommit])
 
   const handleTouchMove = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
     const touch = e.touches[0]
@@ -332,12 +337,14 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
     const nextKey = hit ? `${hit.value}-${hit.multiplier}-${hit.zone}` : null
 
     latestTouchRef.current = { hit, x: touch.clientX, y: touch.clientY }
-    setTouchPoint({ x: touch.clientX, y: touch.clientY })
+    if (HOLD_TO_CONFIRM_MS > 0) {
+      setTouchPoint({ x: touch.clientX, y: touch.clientY })
+    }
     setHovered(hit)
-    if (!touchCommittedRef.current && previousKey !== nextKey) {
+    if (HOLD_TO_CONFIRM_MS > 0 && !touchCommittedRef.current && previousKey !== nextKey) {
       scheduleHoldCommit(hit)
     }
-  }, [getHit, scheduleHoldCommit])
+  }, [HOLD_TO_CONFIRM_MS, getHit, scheduleHoldCommit])
 
   const handleTouchEnd = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
     const touch = e.changedTouches[0]
@@ -358,11 +365,18 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
       return
     }
 
+    if (HOLD_TO_CONFIRM_MS === 0 && !touchCommittedRef.current) {
+      commitHit(hit, touch.clientX, touch.clientY)
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        navigator.vibrate(20)
+      }
+    }
+
     setTouchPoint(null)
     setHovered(hit)
     latestTouchRef.current = null
     touchCommittedRef.current = false
-  }, [clearHoldTimer, getHit])
+  }, [HOLD_TO_CONFIRM_MS, clearHoldTimer, commitHit, getHit])
 
   // ── SVG rendering ───────────────────────────────────────
   const sectors = useMemo(() => {
@@ -577,7 +591,7 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
         )}
       </svg>
 
-      {touchPoint && hovered && (
+      {HOLD_TO_CONFIRM_MS > 0 && touchPoint && hovered && (
         <div
           className="fixed pointer-events-none z-[120]"
           style={{
@@ -601,9 +615,9 @@ export function InteractiveDartboard({ onDartSelected }: InteractiveDartboardPro
         </div>
       )}
 
-      {isMobile && (
+      {isMobile && HOLD_TO_CONFIRM_MS > 0 && (
         <div className="text-[11px] text-amber-400 font-medium bg-amber-500/15 border border-amber-500/30 rounded-md px-2 py-1">
-          Hold on target to confirm
+          {formatString(t.holdToConfirmHint, { ms: HOLD_TO_CONFIRM_MS })}
         </div>
       )}
 

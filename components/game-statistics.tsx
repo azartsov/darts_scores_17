@@ -43,7 +43,8 @@ interface PlayerStats {
   eloDelta: number
 }
 
-export function GameStatistics({ players, gameType, finishMode, winner, totalLegs, currentLeg, autoOpen, hideTrigger }: GameStatisticsProps) {
+export function GameStatistics(props: GameStatisticsProps) {
+  const { players, gameType, finishMode, winner, totalLegs, hideTrigger } = props
   const { t, language } = useI18n()
   const [open, setOpen] = useState(false)
   const [sharing, setSharing] = useState(false)

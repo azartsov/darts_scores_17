@@ -9,7 +9,7 @@ import { LanguageSwitcher } from "./language-switcher"
 import { GameStatistics } from "./game-statistics"
 import { StatsModal } from "./stats-modal"
 import { useAuth } from "@/lib/auth-context"
-import { BarChart3, Trophy, RotateCcw, Home, Cloud, Loader2, AlertCircle } from "lucide-react"
+import { BarChart3, Trophy, RotateCcw, Home, Loader2, AlertCircle } from "lucide-react"
 
 interface VictoryScreenProps {
   winner: Player
@@ -24,25 +24,11 @@ interface VictoryScreenProps {
 }
 
 export function VictoryScreen({ winner, players, gameType, finishMode, totalLegs, currentLeg, onRematch, onNewGame, saveStatus = "idle" }: VictoryScreenProps) {
-  const { t, formatString, language } = useI18n()
+  const { t } = useI18n()
   const { user } = useAuth()
   const isMultiLeg = totalLegs > 1
   const [showStatsModal, setShowStatsModal] = useState(false)
   const statsUserId = user?.uid ?? winner.id
-
-  const finishMessage = finishMode === "double" 
-    ? formatString(t.finishedInTurnsDouble, { turns: winner.history.length })
-    : formatString(t.finishedInTurnsSimple, { turns: winner.history.length })
-
-  const formatDate = (ts: { seconds: number } | null) => {
-    if (!ts) return "-"
-    const d = new Date(ts.seconds * 1000)
-    return d.toLocaleDateString(language === "ru" ? "ru-RU" : "en-US", {
-      day: "2-digit", month: "2-digit",
-    }) + " " + d.toLocaleTimeString(language === "ru" ? "ru-RU" : "en-US", {
-      hour: "2-digit", minute: "2-digit",
-    })
-  }
 
   // Build a lightweight SavedGame-like object from current match state
   const makeSavedGame = () => {

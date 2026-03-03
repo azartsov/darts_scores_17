@@ -8,6 +8,12 @@ import { CHECKOUT_MAP, getSimpleFinishSuggestion } from "@/lib/game-types"
 import { useI18n } from "@/lib/i18n/context"
 import { InteractiveDartboard } from "./interactive-dartboard"
 import { Target, Send, RotateCcw, TrendingDown, Trophy, AlertTriangle, X, Grid3X3, CircleDot } from "lucide-react"
+import {
+  clampTouchHoldDelayMs,
+  DEFAULT_TOUCH_HOLD_DELAY_MS,
+  TOUCH_HOLD_DELAY_EVENT,
+  TOUCH_HOLD_DELAY_STORAGE_KEY,
+} from "@/lib/user-settings"
 
 type InputMode = "buttons" | "dartboard"
 
@@ -34,6 +40,7 @@ export function ScoringInput({ playerName, currentScore, finishMode, onSubmitTur
   const [activeDart, setActiveDart] = useState<0 | 1 | 2>(0)
   const [animatedDart, setAnimatedDart] = useState<0 | 1 | 2 | null>(null)
   const [inputMode, setInputMode] = useState<InputMode>("buttons")
+  const [touchHoldDelayMs, setTouchHoldDelayMs] = useState<number>(DEFAULT_TOUCH_HOLD_DELAY_MS)
 
   // Load saved input mode preference
   useEffect(() => {
@@ -42,9 +49,26 @@ export function ScoringInput({ playerName, currentScore, finishMode, onSubmitTur
       if (saved === "dartboard" || saved === "buttons") {
         setInputMode(saved)
       }
+
+      const savedDelay = localStorage.getItem(TOUCH_HOLD_DELAY_STORAGE_KEY)
+      if (savedDelay !== null) {
+        const parsed = Number.parseInt(savedDelay, 10)
+        setTouchHoldDelayMs(clampTouchHoldDelayMs(parsed))
+      }
     } catch {
       // localStorage not available
     }
+  }, [])
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const custom = event as CustomEvent<number>
+      if (typeof custom.detail !== "number") return
+      setTouchHoldDelayMs(clampTouchHoldDelayMs(custom.detail))
+    }
+
+    window.addEventListener(TOUCH_HOLD_DELAY_EVENT, handler)
+    return () => window.removeEventListener(TOUCH_HOLD_DELAY_EVENT, handler)
   }, [])
 
   const toggleInputMode = () => {
@@ -73,33 +97,6 @@ export function ScoringInput({ playerName, currentScore, finishMode, onSubmitTur
     if (dart.value === 50) return 50
     return dart.value * dart.multiplier
   }
-
-  // Shared handler for both button and dartboard input
-  const handleDartInput = useCallback((value: number, multiplier: 1 | 2 | 3 = 1) => {
-    setDarts(prev => {
-      const newDarts = [...prev] as [DartInput, DartInput, DartInput]
-      let state: DartState
-      let finalMultiplier = multiplier
-
-      if (value === 0) {
-        state = "miss"
-        finalMultiplier = 1
-      } else {
-        state = "scored"
-        if (value === 50) finalMultiplier = 1
-        else if (value === 25 && finalMultiplier === 3) finalMultiplier = 2
-      }
-
-      newDarts[activeDart] = { value, multiplier: finalMultiplier as 1 | 2 | 3, state }
-      return newDarts
-    })
-
-    // Auto-advance to next empty dart
-    setActiveDart(prev => {
-      if (prev < 2) return (prev + 1) as 0 | 1 | 2
-      return prev
-    })
-  }, [activeDart])
 
   // Button mode: value click (uses current dart's existing multiplier for single values)
   const handleValueClick = (value: number) => {
@@ -435,7 +432,7 @@ export function ScoringInput({ playerName, currentScore, finishMode, onSubmitTur
           </>
         ) : (
           /* Dartboard Mode — enhanced visual dartboard on all devices */
-          <InteractiveDartboard onDartSelected={handleDartboardInput} />
+          <InteractiveDartboard onDartSelected={handleDartboardInput} holdDelayMs={touchHoldDelayMs} />
         )}
 
         {/* Action Buttons */}

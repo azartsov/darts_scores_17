@@ -456,7 +456,7 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
     try {
       if (isMobileOrTablet) {
         // Mobile/tablet: generate image and use Web Share API
-        const blob = await generateRatingImage(rankings, language, t)
+        const blob = await generateRatingImage(rankings, language)
         const file = new File([blob], "darts-rating.png", { type: "image/png" })
         if (typeof navigator !== "undefined" && "share" in navigator && navigator.canShare?.({ files: [file] })) {
           await navigator.share({ files: [file], title: language === "ru" ? "Рейтинг Дартс" : "Darts Rating" })
@@ -696,13 +696,12 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
                       <div className="divide-y divide-border/30">
                         {group.games.map((game) => (
                           <GameCard 
-  key={game.id} 
-  game={game} 
-  t={t} 
-  language={language} 
-  formatDate={formatDate} 
-  ratingDeltas={ratingHistory[game.id] || {}} 
-/>
+                            key={game.id}
+                            game={game}
+                            t={t}
+                            formatDate={formatDate}
+                            ratingDeltas={ratingHistory[game.id] || []}
+                          />
                         ))}
                       </div>
                     )}
@@ -829,7 +828,6 @@ interface RatingRow {
 function generateRatingImage(
   rankings: RatingRow[],
   language: string,
-  t: ReturnType<typeof useI18n>["t"],
 ): Promise<Blob> {
   const dpr = 2
   const W = 440 * dpr
@@ -1000,10 +998,9 @@ function PlayerHistoryModal({
   )
 }
 
-function GameCard({ game, t, language, formatDate, ratingDeltas }: {
+function GameCard({ game, t, formatDate, ratingDeltas }: {
   game: SavedGame
   t: ReturnType<typeof useI18n>["t"]
-  language: string
   formatDate: (ts: { seconds: number } | null) => string
   ratingDeltas: { player: string; delta: number; against: string }[]
 }) {
