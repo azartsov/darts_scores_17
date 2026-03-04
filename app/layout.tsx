@@ -53,7 +53,30 @@ export default function RootLayout({
             __html: `
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js');
+                  if (${JSON.stringify(process.env.NODE_ENV)} === 'production') {
+                    navigator.serviceWorker.register('/sw.js');
+                  } else {
+                    Promise.all([
+                      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                        return Promise.all(
+                          registrations.map(function(registration) {
+                            return registration.unregister();
+                          })
+                        );
+                      }),
+                      ('caches' in window)
+                        ? caches.keys().then(function(keys) {
+                            return Promise.all(keys.map(function(key) { return caches.delete(key); }));
+                          })
+                        : Promise.resolve(),
+                    ]).finally(function() {
+                      // If this page was controlled by an old SW, reload once without it.
+                      if (navigator.serviceWorker.controller && !sessionStorage.getItem('sw-dev-cleaned')) {
+                        sessionStorage.setItem('sw-dev-cleaned', '1');
+                        location.reload();
+                      }
+                    });
+                  }
                 });
               }
             `,

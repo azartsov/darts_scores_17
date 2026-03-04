@@ -1,106 +1,69 @@
 "use client"
 
-import { Suspense, lazy, useEffect, useState } from "react"
+import { APP_VERSION } from "@/lib/version"
 
 interface LaunchSplashProps {
   onComplete: () => void
 }
 
-const SPLASH_DURATION_MS = 2200
-const WEAK_SPLASH_DURATION_MS = 1800
-
-const LaunchSplash3D = lazy(async () => {
-  const mod = await import("./launch-splash-3d")
-  return { default: mod.LaunchSplash3D }
-})
-
-function isWeakDevice(): boolean {
-  if (typeof navigator === "undefined") return false
-
-  const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
-  const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData
-  const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory
-  const cores = navigator.hardwareConcurrency
-
-  if (reducedMotion) return true
-  if (saveData) return true
-  if (typeof memory === "number" && memory <= 4) return true
-  if (typeof cores === "number" && cores <= 4) return true
-
-  return false
-}
-
-function StaticSplash() {
+export function LaunchSplash({ onComplete }: LaunchSplashProps) {
   return (
-    <div className="fixed inset-0 z-[120] bg-background flex items-center justify-center">
-      <div className="relative w-[320px] h-[320px] max-w-[86vw] max-h-[86vw]">
-        <svg viewBox="0 0 320 320" className="w-full h-full drop-shadow-[0_0_40px_rgba(15,23,42,0.65)]">
+    <div
+      suppressHydrationWarning
+      className="fixed inset-0 z-[120] bg-background flex items-center justify-center px-6"
+      onClick={onComplete}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault()
+          onComplete()
+        }
+      }}
+      aria-label="Continue to app"
+    >
+      <div className="w-full max-w-[360px] text-center space-y-4">
+        <svg viewBox="0 0 320 320" className="w-full h-auto drop-shadow-[0_0_34px_rgba(15,23,42,0.55)]">
           <defs>
-            <radialGradient id="bgGlow" cx="50%" cy="44%" r="60%">
-              <stop offset="0%" stopColor="#1e293b" />
-              <stop offset="70%" stopColor="#0b1220" />
+            <radialGradient id="targetBg" cx="50%" cy="50%" r="52%">
+              <stop offset="0%" stopColor="#0f172a" />
+              <stop offset="72%" stopColor="#0b1220" />
               <stop offset="100%" stopColor="#020617" />
             </radialGradient>
-            <linearGradient id="dartMetal" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#cbd5e1" />
-              <stop offset="100%" stopColor="#f8fafc" />
-            </linearGradient>
           </defs>
 
-          <rect x="0" y="0" width="320" height="320" rx="32" fill="url(#bgGlow)" />
+          <rect x="12" y="12" width="296" height="296" rx="28" fill="url(#targetBg)" />
 
-          <circle cx="160" cy="160" r="124" fill="#111827" stroke="#334155" strokeWidth="4" />
-          <circle cx="160" cy="160" r="106" fill="#f8fafc" />
-          <circle cx="160" cy="160" r="78" fill="#0f172a" />
-          <circle cx="160" cy="160" r="48" fill="#f8fafc" />
+          <circle cx="160" cy="160" r="125" fill="#111827" stroke="#334155" strokeWidth="4" />
+          <circle cx="160" cy="160" r="105" fill="#f8fafc" />
+          <circle cx="160" cy="160" r="80" fill="#0f172a" />
+          <circle cx="160" cy="160" r="58" fill="#f8fafc" />
+          <circle cx="160" cy="160" r="30" fill="#16a34a" />
+          <circle cx="160" cy="160" r="14" fill="#dc2626" />
 
-          <path d="M160 36 L168 84 L152 84 Z" fill="#dc2626" />
-          <path d="M160 84 L166 112 L154 112 Z" fill="#16a34a" />
-          <text x="160" y="31" textAnchor="middle" fill="#e2e8f0" fontSize="16" fontWeight="800">20</text>
-
-          <circle cx="160" cy="89" r="18" fill="none" stroke="#f59e0b" strokeWidth="2" opacity="0.95" />
-          <circle cx="160" cy="89" r="9" fill="none" stroke="#facc15" strokeWidth="2" opacity="0.95" />
-
-          {/* Dart fixed in T20 */}
-          <g transform="translate(160 89) rotate(-82)">
-            <polygon points="-72,-9 -62,0 -72,9" fill="#3b82f6" />
-            <rect x="-62" y="-2" width="52" height="4" rx="2" fill="url(#dartMetal)" />
-            <rect x="-12" y="-3" width="10" height="6" rx="2" fill="#60a5fa" />
-            <polygon points="0,-4 14,0 0,4" fill="#f59e0b" />
-          </g>
+          <text x="160" y="42" textAnchor="middle" fill="#e2e8f0" fontSize="16" fontWeight="800">20</text>
+          <text x="160" y="286" textAnchor="middle" fill="#e2e8f0" fontSize="16" fontWeight="800">3</text>
+          <text x="36" y="166" textAnchor="middle" fill="#e2e8f0" fontSize="16" fontWeight="800">11</text>
+          <text x="284" y="166" textAnchor="middle" fill="#e2e8f0" fontSize="16" fontWeight="800">6</text>
         </svg>
 
-        <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 text-center">
-          <div className="text-slate-100/90 font-semibold tracking-widest text-sm">DARTMASTER PRO</div>
-          <div className="text-slate-300/70 text-xs mt-1">T20 IMPACT</div>
+        <div className="pointer-events-none text-center">
+          <div className="text-slate-100/95 font-semibold tracking-[0.16em] text-sm uppercase">Darts Scorer</div>
+          <div className="text-slate-400/80 text-xs mt-1">v{APP_VERSION}</div>
+          <div className="text-slate-300/75 text-xs mt-3">Tap anywhere to continue</div>
         </div>
+
+        <button
+          type="button"
+          className="mx-auto mt-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+          onClick={(event) => {
+            event.stopPropagation()
+            onComplete()
+          }}
+        >
+          Continue
+        </button>
       </div>
     </div>
-  )
-}
-
-export function LaunchSplash({ onComplete }: LaunchSplashProps) {
-  const [weakMode, setWeakMode] = useState(false)
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-    setWeakMode(isWeakDevice())
-  }, [])
-
-  useEffect(() => {
-    const duration = weakMode ? WEAK_SPLASH_DURATION_MS : SPLASH_DURATION_MS
-    const timer = setTimeout(() => onComplete(), duration)
-    return () => clearTimeout(timer)
-  }, [onComplete, weakMode])
-
-  if (!mounted || weakMode) {
-    return <StaticSplash />
-  }
-
-  return (
-    <Suspense fallback={<StaticSplash />}>
-      <LaunchSplash3D />
-    </Suspense>
   )
 }
