@@ -7,6 +7,7 @@ import { VictoryScreen } from "@/components/victory-screen"
 import { LegTransition } from "@/components/leg-transition"
 import { LoginScreen } from "@/components/login-screen"
 import { UserInfoBar } from "@/components/user-info-bar"
+import { LaunchSplash } from "@/components/launch-splash"
 import type { GameState, Player, GameType, DartInput, FinishMode, TotalLegs } from "@/lib/game-types"
 import { saveGameState, loadGameState, clearGameState } from "@/lib/game-storage"
 import { useAuth } from "@/lib/auth-context"
@@ -33,6 +34,7 @@ export default function DartMasterPro() {
   const [gameState, setGameState] = useState<GameState>(initialGameState)
   const [undoStack, setUndoStack] = useState<GameState[]>([])
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [showLaunchSplash, setShowLaunchSplash] = useState(true)
   const savedGameRef = useRef(false)
 
   // Show login screen if not authenticated and not guest
@@ -198,6 +200,10 @@ export default function DartMasterPro() {
   }, [])
 
   // Loading state
+  if (showLaunchSplash) {
+    return <LaunchSplash onComplete={() => setShowLaunchSplash(false)} />
+  }
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">

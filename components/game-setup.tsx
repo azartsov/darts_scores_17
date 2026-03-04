@@ -45,6 +45,12 @@ export function GameSetup({ onStartGame }: GameSetupProps) {
   const [isTouchDragging, setIsTouchDragging] = useState(false)
   const [touchPoint, setTouchPoint] = useState<{ x: number; y: number } | null>(null)
 
+  const vibrate = (pattern: number | number[]) => {
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(pattern)
+    }
+  }
+
   const legsOptions: TotalLegs[] = [1, 3, 5, 7, 9]
   const legsToWin = Math.ceil(totalLegs / 2)
 
@@ -80,6 +86,7 @@ export function GameSetup({ onStartGame }: GameSetupProps) {
   const handleDragStart = (index: number) => {
     setDraggedIndex(index)
     setDragOverIndex(index)
+    vibrate(16)
   }
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>, index: number) => {
@@ -116,6 +123,7 @@ export function GameSetup({ onStartGame }: GameSetupProps) {
     setIsTouchDragging(true)
     setDraggedIndex(index)
     setDragOverIndex(index)
+    vibrate(16)
     if (touch) {
       setTouchPoint({ x: touch.clientX, y: touch.clientY })
     }
@@ -136,6 +144,7 @@ export function GameSetup({ onStartGame }: GameSetupProps) {
   const handleTouchEnd = () => {
     if (draggedIndex !== null && dragOverIndex !== null) {
       movePlayer(draggedIndex, dragOverIndex)
+      vibrate([10, 40, 18])
     }
     setIsTouchDragging(false)
     setDraggedIndex(null)
