@@ -48,14 +48,17 @@ export function GameBoard({
             <Target className="w-4 h-4 text-primary shrink-0" />
             <h1 className="text-sm font-bold text-foreground truncate shrink-1">{t.appTitle}</h1>
             <span className="px-1 py-0.5 bg-primary/20 text-primary text-[10px] font-medium rounded shrink-0">{gameType}</span>
-            {/* Finish Mode Indicator */}
-            <span className={`px-1 py-0.5 text-[10px] font-medium rounded flex items-center gap-0.5 shrink-0 ${
-              finishMode === "double" 
-                ? "bg-amber-500/20 text-amber-500" 
-                : "bg-secondary text-muted-foreground"
-            }`}>
-              {finishMode === "double" ? <CircleDot className="w-2.5 h-2.5" /> : <Circle className="w-2.5 h-2.5" />}
-              <span className="hidden xs:inline">{finishMode === "double" ? t.finishDouble : t.finishSimple}</span>
+            {/* Finish Mode Indicator: high-contrast and always visible text */}
+            <span
+              className={`px-2 py-1 text-[11px] leading-none font-semibold rounded-md border flex items-center gap-1 shrink-0 ${
+                finishMode === "double"
+                  ? "bg-amber-500/25 text-amber-300 border-amber-400/60"
+                  : "bg-primary/20 text-primary border-primary/50"
+              }`}
+              aria-label={`${t.finishMode}: ${finishMode === "double" ? t.finishDouble : t.finishSimple}`}
+            >
+              {finishMode === "double" ? <CircleDot className="w-3 h-3" /> : <Circle className="w-3 h-3" />}
+              <span>{finishMode === "double" ? t.finishDouble : t.finishSimple}</span>
             </span>
             {/* Leg Indicator */}
             {isMultiLeg && (
