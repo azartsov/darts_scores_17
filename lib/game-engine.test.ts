@@ -39,6 +39,92 @@ function miss(): DartInput {
 }
 
 describe("applyTurn", () => {
+  describe("game completion matrix", () => {
+    it.each([
+      { gameType: 301 as const, finishMode: "simple" as const, currentScore: 32, darts: [32, 0, 0] as [number, number, number], details: [scored(16, 2), miss(), miss()] as [DartInput, DartInput, DartInput] },
+      { gameType: 301 as const, finishMode: "double" as const, currentScore: 40, darts: [40, 0, 0] as [number, number, number], details: [scored(20, 2), miss(), miss()] as [DartInput, DartInput, DartInput] },
+      { gameType: 501 as const, finishMode: "simple" as const, currentScore: 45, darts: [45, 0, 0] as [number, number, number], details: [scored(15, 3), miss(), miss()] as [DartInput, DartInput, DartInput] },
+      { gameType: 501 as const, finishMode: "double" as const, currentScore: 50, darts: [50, 0, 0] as [number, number, number], details: [scored(25, 2), miss(), miss()] as [DartInput, DartInput, DartInput] },
+    ])(
+      "finishes single-leg game for $gameType in $finishMode mode",
+      ({ gameType, finishMode, currentScore, darts, details }) => {
+        const state = makeState({
+          gameType,
+          finishMode,
+          totalLegs: 1,
+          players: [
+            { ...makePlayer("A", gameType), currentScore },
+            { ...makePlayer("B", gameType), currentScore: gameType },
+          ],
+        })
+
+        const next = applyTurn(state, darts, details)
+        expect(next.phase).toBe("finished")
+        expect(next.winner?.name).toBe("A")
+        expect(next.players[0].currentScore).toBe(0)
+      },
+    )
+
+    it.each([
+      { gameType: 301 as const, totalLegs: 3 as const },
+      { gameType: 501 as const, totalLegs: 5 as const },
+      { gameType: 501 as const, totalLegs: 7 as const },
+    ])(
+      "finishes match when player reaches required legs ($gameType, best of $totalLegs)",
+      ({ gameType, totalLegs }) => {
+        const legsToWin = Math.ceil(totalLegs / 2)
+        const state = makeState({
+          gameType,
+          finishMode: "double",
+          totalLegs,
+          currentLeg: legsToWin,
+          players: [
+            { ...makePlayer("A", gameType), currentScore: 40, legsWon: legsToWin - 1 },
+            { ...makePlayer("B", gameType), currentScore: gameType, legsWon: 0 },
+          ],
+        })
+
+        const next = applyTurn(state, [40, 0, 0], [scored(20, 2), miss(), miss()])
+        expect(next.phase).toBe("finished")
+        expect(next.winner?.name).toBe("A")
+        expect(next.players[0].legsWon).toBe(legsToWin)
+      },
+    )
+
+    it.each([
+      { totalLegs: 1 as const, expectedPhase: "finished" as const },
+      { totalLegs: 3 as const, expectedPhase: "legFinished" as const },
+      { totalLegs: 5 as const, expectedPhase: "legFinished" as const },
+      { totalLegs: 7 as const, expectedPhase: "legFinished" as const },
+      { totalLegs: 9 as const, expectedPhase: "legFinished" as const },
+    ])(
+      "smoke: after winning a leg in best of $totalLegs, phase is $expectedPhase",
+      ({ totalLegs, expectedPhase }) => {
+        const state = makeState({
+          gameType: 501,
+          finishMode: "double",
+          totalLegs,
+          players: [
+            { ...makePlayer("A", 501), currentScore: 40, legsWon: 0 },
+            { ...makePlayer("B", 501), currentScore: 501, legsWon: 0 },
+          ],
+        })
+
+        const next = applyTurn(state, [40, 0, 0], [scored(20, 2), miss(), miss()])
+        expect(next.phase).toBe(expectedPhase)
+        expect(next.players[0].legsWon).toBe(1)
+
+        if (expectedPhase === "legFinished") {
+          expect(next.winner).toBeNull()
+          expect(next.legWinner?.name).toBe("A")
+        } else {
+          expect(next.winner?.name).toBe("A")
+          expect(next.legWinner).toBeNull()
+        }
+      },
+    )
+  })
+
   it("finishes in simple mode on exact zero", () => {
     const state = makeState({
       finishMode: "simple",

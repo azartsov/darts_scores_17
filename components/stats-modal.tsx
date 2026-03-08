@@ -28,15 +28,6 @@ interface StatsModalProps {
   onClose: () => void
 }
 
-interface PlayerRanking {
-  name: string
-  gamesPlayed: number
-  wins: number
-  winPct: number
-  avgPer3: number
-  checkoutPct: number | null
-}
-
 interface MonthGroup {
   label: string
   sortKey: string
@@ -48,7 +39,7 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
   const [games, setGames] = useState<SavedGame[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<"ranking" | "history" | "elo">("elo")
+  const [tab, setTab] = useState<"history" | "elo">("elo")
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set())
 
   // For ELO tab: which player (if any) is selected to view their history
@@ -120,57 +111,6 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [userId, t, language, user])
-
-  // Tab 1: Compute player rankings across all games
-  const rankings = useMemo((): PlayerRanking[] => {
-    const map = new Map<string, {
-      games: number; wins: number;
-      totalPoints: number; totalDarts: number;
-      checkoutSuccesses: number; checkoutAttempts: number;
-    }>()
-
-    for (const game of games) {
-      for (const p of game.players) {
-        const entry = map.get(p.name) || {
-          games: 0, wins: 0,
-          totalPoints: 0, totalDarts: 0,
-          checkoutSuccesses: 0, checkoutAttempts: 0,
-        }
-        entry.games++
-        if (p.name === game.winner) entry.wins++
-        // Re-derive avg from stored average and darts:
-        // stored avg = (points / darts) * 3, so points = avg * darts / 3
-        entry.totalPoints += (p.average * p.totalDarts) / 3
-        entry.totalDarts += p.totalDarts
-        // CO%: accumulate from saved value
-        if (p.checkoutPct !== null && p.checkoutPct !== undefined) {
-          // We can only estimate: treat each game as 1 attempt for weighting
-          entry.checkoutSuccesses += p.checkoutPct
-          entry.checkoutAttempts++
-        }
-        map.set(p.name, entry)
-      }
-    }
-
-    return Array.from(map.entries())
-      .map(([name, s]) => ({
-        name,
-        gamesPlayed: s.games,
-        wins: s.wins,
-        winPct: s.games > 0 ? Math.round((s.wins / s.games) * 1000) / 10 : 0,
-        avgPer3: s.totalDarts > 0 ? Math.round((s.totalPoints / s.totalDarts) * 3 * 10) / 10 : 0,
-        checkoutPct: s.checkoutAttempts > 0
-          ? Math.round((s.checkoutSuccesses / s.checkoutAttempts) * 10) / 10
-          : null,
-      }))
-      // Sort: win% desc → avg/3 desc → CO% desc → name asc
-      .sort((a, b) =>
-        b.winPct - a.winPct
-        || b.avgPer3 - a.avgPer3
-        || (b.checkoutPct ?? -1) - (a.checkoutPct ?? -1)
-        || a.name.localeCompare(b.name)
-      )
-  }, [games])
 
   // ELO rankings: compute per-player rating using shared helper and also
   // aggregate a few additional stats for display.
@@ -451,24 +391,24 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
   const isMobileOrTablet = typeof window !== "undefined" && (window.innerWidth <= 1024 || "ontouchstart" in window)
 
   const handleShareRating = useCallback(async () => {
-    if (rankings.length === 0) return
+    if (eloRankings.length === 0) return
     setSharing(true)
     try {
       if (isMobileOrTablet) {
         // Mobile/tablet: generate image and use Web Share API
-        const blob = await generateRatingImage(rankings, language)
+        const blob = await generateRatingImage(eloRankings, language)
         const file = new File([blob], "darts-rating.png", { type: "image/png" })
         if (typeof navigator !== "undefined" && "share" in navigator && navigator.canShare?.({ files: [file] })) {
           await navigator.share({ files: [file], title: language === "ru" ? "Рейтинг Дартс" : "Darts Rating" })
         } else {
           // Fallback: copy text
-          const text = generateRatingText(rankings, language)
+          const text = generateRatingText(eloRankings, language)
           await navigator.clipboard.writeText(text)
           setToast({ msg: t.ratingCopied, type: "ok" })
         }
       } else {
         // Desktop: copy formatted text to clipboard
-        const text = generateRatingText(rankings, language)
+        const text = generateRatingText(eloRankings, language)
         await navigator.clipboard.writeText(text)
         setToast({ msg: t.ratingCopied, type: "ok" })
       }
@@ -477,7 +417,7 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
     } finally {
       setSharing(false)
     }
-  }, [rankings, language, t, isMobileOrTablet])
+  }, [eloRankings, language, t, isMobileOrTablet])
 
   return (
     <>
@@ -513,7 +453,7 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[180px]">
                   {/* Share / Copy */}
-                  {rankings.length > 0 && (
+                  {eloRankings.length > 0 && (
                     <>
                       <DropdownMenuItem
                         onClick={handleShareRating}
@@ -790,26 +730,27 @@ export function StatsModal({ userId, onClose }: StatsModalProps) {
 
 // ── Formatted text for clipboard (desktop) ──
 function generateRatingText(
-  rankings: { name: string; gamesPlayed: number; wins: number; winPct: number; avgPer3: number; checkoutPct: number | null }[],
+  rankings: { name: string; elo: number; gamesPlayed: number; wins: number; winPct: number; avgPer3: number; checkoutPct: number | null }[],
   language: string,
 ): string {
   const isRu = language === "ru"
   const title = isRu ? "РЕЙТИНГ ДАРТС" : "DARTS PLAYER RATING"
   const date = new Date().toLocaleDateString(isRu ? "ru-RU" : "en-US", { day: "2-digit", month: "2-digit", year: "numeric" })
   const header = isRu
-    ? " #  Игрок          Игры Поб.  Win%  Ср/3   CO%"
-    : " #  Player         Games Wins  Win%  Avg/3  CO%"
+    ? " #  Игрок          ELO  Игры Поб.  Win%  Ср/3   CO%"
+    : " #  Player         ELO  Games Wins  Win%  Avg/3  CO%"
   const sep = "-".repeat(header.length)
 
   const rows = rankings.map((r, i) => {
     const pos = String(i + 1).padStart(2)
     const name = r.name.length > 14 ? r.name.substring(0, 13) + "." : r.name.padEnd(14)
-    const games = String(r.gamesPlayed).padStart(isRu ? 4 : 5)
+    const elo = String(r.elo).padStart(4)
+    const games = String(r.gamesPlayed).padStart(isRu ? 5 : 5)
     const wins = String(r.wins).padStart(4)
     const pct = r.winPct.toFixed(1).padStart(5)
     const avg = r.avgPer3.toFixed(1).padStart(5)
     const co = (r.checkoutPct !== null ? r.checkoutPct.toFixed(1) : "-").padStart(5)
-    return `${pos}. ${name} ${games} ${wins} ${pct} ${avg} ${co}`
+    return `${pos}. ${name} ${elo} ${games} ${wins} ${pct} ${avg} ${co}`
   })
 
   return [title, date, "", header, sep, ...rows, sep].join("\n")
@@ -818,6 +759,7 @@ function generateRatingText(
 // ── Canvas image generator for rating table ──
 interface RatingRow {
   name: string
+  elo: number
   gamesPlayed: number
   wins: number
   winPct: number
@@ -830,7 +772,7 @@ function generateRatingImage(
   language: string,
 ): Promise<Blob> {
   const dpr = 2
-  const W = 440 * dpr
+  const W = 500 * dpr
   const pad = 20 * dpr
   const rowH = 28 * dpr
   const headerH = 70 * dpr
@@ -865,6 +807,7 @@ function generateRatingImage(
   const colX = {
     pos: pad,
     name: pad + 28 * dpr,
+    elo: W / 2 - 70 * dpr,
     games: W / 2 - 20 * dpr,
     wins: W / 2 + 30 * dpr,
     pct: W / 2 + 90 * dpr,
@@ -882,6 +825,7 @@ function generateRatingImage(
   ctx.fillText("#", colX.pos, tableY + 20 * dpr)
   ctx.fillText(language === "ru" ? "Игрок" : "Player", colX.name, tableY + 20 * dpr)
   ctx.textAlign = "right"
+  ctx.fillText("ELO", colX.elo, tableY + 20 * dpr)
   ctx.fillText(language === "ru" ? "Игры" : "Games", colX.games, tableY + 20 * dpr)
   ctx.fillText(language === "ru" ? "Победы" : "Wins", colX.wins, tableY + 20 * dpr)
   ctx.fillText("Win%", colX.pct, tableY + 20 * dpr)
@@ -911,6 +855,7 @@ function generateRatingImage(
 
     ctx.textAlign = "right"
     ctx.fillStyle = "#cbd5e1"
+    ctx.fillText(`${r.elo}`, colX.elo, textY)
     ctx.fillText(`${r.gamesPlayed}`, colX.games, textY)
     ctx.fillText(`${r.wins}`, colX.wins, textY)
 

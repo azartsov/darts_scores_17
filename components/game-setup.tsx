@@ -402,7 +402,7 @@ export function GameSetup({ onStartGame }: GameSetupProps) {
             <div className="space-y-2">
               {playerNames.map((name, index) => (
                 <div
-                  key={`${name}-${index}`}
+                  key={`player-row-${index}`}
                   data-player-index={index}
                   onDragOver={(event) => handleDragOver(event, index)}
                   onDrop={(event) => handleDrop(event, index)}
