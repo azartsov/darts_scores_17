@@ -77,7 +77,7 @@ The standalone Expo mobile app now lives in its own repository:
 
 - `darts-scores-native`
 
-The nested `expo-mobile` folder is not part of this web repository anymore.
+The local mobile workspace now lives alongside this project at `/Users/valeryazartsov/darts-scorer-native`.
 
 ## Testing
 
