@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# standalone mobile app lives in its own repository
+/expo-mobile/
+
+# stray Expo config is not part of the web app repository
+/app.json
