@@ -1,6 +1,6 @@
 # Changelog
 
-All notable project-level updates for DartMaster Pro are recorded here.
+All notable project-level updates for Darts Scorer Web are recorded here.
 
 ## 2026-03-08
 

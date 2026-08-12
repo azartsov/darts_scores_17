@@ -1,6 +1,6 @@
-# DartMaster Pro (`darts_scorer`)
+# Darts Scorer Web (`darts-scorer-web`)
 
-`DartMaster Pro` is a multiplayer darts scorer built with Next.js 16, React 19, and Firebase.
+`Darts Scorer Web` is a multiplayer darts scorer built with Next.js 16, React 19, and Firebase.
 
 The web app covers the full match loop for local and authenticated players, with persistent stats, Elo, history, and Firestore-backed cloud state.
 
