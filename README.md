@@ -1,4 +1,4 @@
-# DartMaster Pro (`darts_scores_17`)
+# DartMaster Pro (`darts_scorer`)
 
 Multiplayer darts scorer built with Next.js 16, React 19 and Firebase.
 
@@ -15,7 +15,7 @@ Multiplayer darts scorer built with Next.js 16, React 19 and Firebase.
 ```bash
 . "$HOME/.nvm/nvm.sh"
 nvm use 24
-cd /Users/username/Work/DartsScore/darts_scores_17/my-app
+cd /Users/username/Work/DartsScore/darts_scores_17
 npm install
 npm run dev
 ```
@@ -90,3 +90,7 @@ npm run test
 - Build automatically updates `lib/version.ts` via `scripts/update-version.js`.
 - For game-rule changes, prefer editing pure logic in `lib/game-engine.ts` and add/adjust tests first.
 - Keep translation keys in sync for both `en` and `ru` in `lib/i18n/translations.ts`.
+
+## Changelog
+
+Project-level updates are tracked in [CHANGELOG.md](CHANGELOG.md).
