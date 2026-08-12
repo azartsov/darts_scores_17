@@ -39,7 +39,7 @@ The web app covers the full match loop for local and authenticated players, with
 
 1. `. "$HOME/.nvm/nvm.sh"`
 2. `nvm use 24`
-3. `cd /Users/valeryazartsov/darts_scores_17`
+3. `cd /Users/valeryazartsov/darts-scorer-web`
 4. `npm install`
 5. `npm run dev`
 6. Open `http://localhost:3000`
